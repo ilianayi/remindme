@@ -1,0 +1,2984 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>提醒助手</title>
+<style>
+  :root {
+    --bg: #FAF8F3;
+    --surface: #FFFFFF;
+    --surface-2: #F1EFE8;
+    --border: rgba(0,0,0,0.08);
+    --border-strong: rgba(0,0,0,0.16);
+    --text: #1A1A1A;
+    --text-2: #5F5E5A;
+    --text-3: #9A9994;
+    --accent: #185FA5;
+    --accent-bg: #E6F1FB;
+    --danger: #A32D2D;
+    --danger-bg: #FCEBEB;
+    --warning: #854F0B;
+    --warning-bg: #FAEEDA;
+    --success: #0F6E56;
+    --success-bg: #E1F5EE;
+    --purple: #534AB7;
+    --purple-bg: #EEEDFE;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --shadow: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-lg: 0 4px 12px rgba(0,0,0,0.08);
+    --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.6; min-height: 100vh; }
+  
+  .app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+  .sidebar { background: var(--surface); border-right: 0.5px solid var(--border); padding: 20px 16px; position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; }
+  .main { padding: 24px 32px; max-width: 1200px; }
+  
+  .logo { font-size: 16px; font-weight: 600; margin-bottom: 24px; display: flex; align-items: center; gap: 8px; }
+  .logo-icon { width: 28px; height: 28px; background: var(--text); color: var(--surface); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  
+  .nav-section { margin-bottom: 20px; }
+  .nav-title { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding: 0 8px; font-weight: 500; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--text-2); margin-bottom: 4px; transition: all 0.15s; }
+  .nav-item:hover { background: var(--surface-2); color: var(--text); }
+  .nav-item.active { background: var(--text); color: var(--surface); font-weight: 500; }
+  .nav-item .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+  .nav-item .count { margin-left: auto; font-size: 11px; padding: 1px 7px; border-radius: 8px; background: var(--surface-2); color: var(--text-2); font-weight: 500; }
+  .nav-item.active .count { background: rgba(255,255,255,0.18); color: var(--surface); }
+  .nav-item .count.urgent { background: var(--danger-bg); color: var(--danger); }
+  
+  .sidebar-bottom { margin-top: auto; padding-top: 16px; border-top: 0.5px solid var(--border); }
+  .sidebar-action { font-size: 12px; padding: 6px 8px; color: var(--text-2); cursor: pointer; border-radius: 6px; margin-bottom: 2px; }
+  .sidebar-action:hover { background: var(--surface-2); color: var(--text); }
+  
+  .header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; }
+  .page-title { font-size: 24px; font-weight: 600; letter-spacing: -0.3px; }
+  .page-subtitle { font-size: 13px; color: var(--text-2); margin-top: 4px; }
+  .toolbar { display: flex; gap: 8px; }
+  
+  button { font-family: var(--font); font-size: 13px; padding: 7px 14px; border-radius: 6px; border: 0.5px solid var(--border-strong); background: var(--surface); color: var(--text); cursor: pointer; transition: all 0.15s; }
+  button:hover { background: var(--surface-2); }
+  button:active { transform: scale(0.98); }
+  button.primary { background: var(--text); color: var(--surface); border-color: var(--text); }
+  button.primary:hover { background: #333; }
+  button.danger { color: var(--danger); border-color: var(--danger-bg); }
+  button.ghost { border-color: transparent; }
+  button.small { padding: 4px 10px; font-size: 12px; }
+  button.icon-only { padding: 4px 8px; font-size: 14px; }
+  
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat { background: var(--surface); padding: 14px 16px; border-radius: var(--radius-lg); border: 0.5px solid var(--border); }
+  .stat-label { font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+  .stat-value { font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
+  .stat-value.danger { color: var(--danger); }
+  .stat-value.warning { color: var(--warning); }
+  
+  .tree { background: var(--surface); border-radius: var(--radius-lg); border: 0.5px solid var(--border); overflow: hidden; }
+  .game-header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; cursor: pointer; border-bottom: 0.5px solid var(--border); background: var(--surface); transition: background 0.15s; }
+  .game-header:hover { background: var(--surface-2); }
+  .game-header:last-child { border-bottom: none; }
+  .game-name { font-size: 15px; font-weight: 600; flex: 1; }
+  .caret { width: 12px; height: 12px; color: var(--text-3); transition: transform 0.15s; flex-shrink: 0; }
+  .caret.open { transform: rotate(90deg); }
+  .game-actions { opacity: 0; transition: opacity 0.15s; display: flex; gap: 4px; }
+  .game-header:hover .game-actions { opacity: 1; }
+  
+  .module { border-bottom: 0.5px solid var(--border); }
+  .module:last-child { border-bottom: none; }
+  .module-header { display: flex; align-items: center; gap: 10px; padding: 10px 18px 10px 36px; cursor: pointer; background: var(--bg); border-left: 2px solid var(--border); margin-left: 16px; transition: background 0.15s; }
+  .module-header:hover { background: var(--surface-2); }
+  .module-name { flex: 1; font-size: 14px; font-weight: 500; }
+  .module-name-fixed { font-size: 14px; font-weight: 500; flex-shrink: 0; }
+  .module-note-wrap { flex: 1; min-width: 0; padding: 0 8px; overflow: hidden; }
+  .module-note-inline { font-size: 11px; color: var(--text-2); cursor: pointer; padding: 3px 8px; border-radius: 4px; background: var(--surface-2); display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+  .module-note-inline:hover { background: var(--accent-bg); color: var(--accent); }
+  .module-actions { opacity: 0; display: flex; gap: 4px; }
+  .module-header:hover .module-actions { opacity: 1; }
+  
+  .task-list { padding: 4px 0 8px 56px; }
+  .task { display: grid; grid-template-columns: 70px minmax(0, 1.6fr) 110px 90px 110px 70px; gap: 10px; align-items: center; padding: 10px 18px 10px 0; border-bottom: 0.5px solid var(--border); font-size: 13px; cursor: pointer; transition: background 0.1s; border-left: 3px solid transparent; padding-left: 12px; margin-left: -16px; }
+  .task:hover { background: var(--surface-2); }
+  .task:last-child { border-bottom: none; }
+  .task.urgent { background: var(--danger-bg); border-left-color: var(--danger); }
+  .task.urgent:hover { background: #f9dada; }
+  .task.overdue { background: var(--warning-bg); border-left-color: var(--warning); }
+  .task.overdue:hover { background: #f5e2c1; }
+  .task.soon { border-left-color: var(--accent); }
+  .task.done { opacity: 0.5; }
+  .task.done .task-name-text { text-decoration: line-through; }
+  
+  .task-name { font-weight: 500; display: flex; align-items: center; gap: 6px; min-width: 0; flex-direction: column; align-items: flex-start; }
+  .task-name-row { display: flex; align-items: center; gap: 6px; width: 100%; }
+  .task-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task-countdown { font-size: 11px; color: var(--accent); display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+  .task-countdown.urgent { color: var(--danger); font-weight: 500; }
+  .task-countdown.overdue { color: var(--warning); font-weight: 500; }
+  .task-note-line { font-size: 11px; color: var(--text-3); font-weight: 400; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  
+  .badge { display: inline-flex; align-items: center; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500; white-space: nowrap; }
+  .badge.danger { background: var(--danger-bg); color: var(--danger); }
+  .badge.warning { background: var(--warning-bg); color: var(--warning); }
+  .badge.info { background: var(--accent-bg); color: var(--accent); }
+  .badge.success { background: var(--success-bg); color: var(--success); }
+  .badge.purple { background: var(--purple-bg); color: var(--purple); }
+  .badge.gray { background: var(--surface-2); color: var(--text-2); }
+  .badge.tiny { font-size: 10px; padding: 1px 5px; }
+  
+  .history-mark { color: var(--warning); font-size: 11px; cursor: help; }
+  
+  input[type="text"], input[type="date"], input[type="number"], select, textarea {
+    font-family: var(--font); font-size: 13px; padding: 8px 12px;
+    border: 0.5px solid var(--border-strong); border-radius: 6px;
+    background: var(--surface); color: var(--text); width: 100%;
+    transition: border-color 0.15s;
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+  textarea { resize: vertical; min-height: 60px; font-family: var(--font); }
+  label { display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px; color: var(--text-2); }
+  .field { margin-bottom: 14px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .required { color: var(--danger); }
+  
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+  .modal-bg.show { display: flex; }
+  .modal { background: var(--surface); border-radius: var(--radius-lg); width: 100%; max-width: 580px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); }
+  .modal-header { padding: 18px 20px; border-bottom: 0.5px solid var(--border); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: var(--surface); z-index: 1; }
+  .modal-title { font-size: 16px; font-weight: 600; }
+  .modal-body { padding: 20px; }
+  .modal-footer { padding: 14px 20px; border-top: 0.5px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; position: sticky; bottom: 0; background: var(--surface); }
+  .close-btn { background: transparent; border: none; font-size: 20px; color: var(--text-3); cursor: pointer; padding: 0 4px; }
+  .close-btn:hover { color: var(--text); background: transparent; }
+  
+  .history-list { background: var(--surface-2); border-radius: 6px; padding: 10px 12px; }
+  .history-item { font-size: 12px; padding: 6px 0; border-bottom: 0.5px dashed var(--border); color: var(--text-2); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .history-item:last-child { border-bottom: none; }
+  .strikethrough { text-decoration: line-through; color: var(--text-3); }
+  .history-arrow { color: var(--text-3); }
+  .history-time { color: var(--text-3); margin-left: auto; font-size: 11px; }
+  
+  .empty { text-align: center; padding: 60px 20px; color: var(--text-2); }
+  .empty-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.4; }
+  .empty-title { font-size: 15px; font-weight: 500; margin-bottom: 6px; color: var(--text); }
+  .empty-text { font-size: 13px; }
+  
+  .stage-pill { display: inline-flex; align-items: center; padding: 5px 12px; font-size: 12px; border-radius: 14px; background: var(--surface-2); cursor: pointer; margin: 0 6px 6px 0; border: 0.5px solid transparent; transition: all 0.15s; }
+  .stage-pill:hover { background: var(--accent-bg); color: var(--accent); }
+  .stage-pill.selected { background: var(--text); color: var(--surface); }
+  
+  /* 项目颜色选择器 */
+  .color-swatch { width: 32px; height: 32px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: all 0.1s; position: relative; }
+  .color-swatch:hover { transform: scale(1.08); }
+  .color-swatch.selected { border-color: var(--text); transform: scale(1.05); }
+  .color-swatch.selected::after { content: '✓'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 14px; font-weight: bold; text-shadow: 0 0 2px rgba(0,0,0,0.4); }
+  
+  /* 模块备注独立行(方案B) */
+  .module-note-line { font-size: 11px; color: var(--text-2); padding: 0 18px 8px 52px; margin-left: 16px; background: var(--bg); border-left: 2px solid var(--border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; transition: color 0.15s; }
+  .module-note-line:hover { color: var(--text); background: var(--surface-2); }
+  
+  .type-tab { display: inline-flex; align-items: center; padding: 8px 18px; font-size: 13px; cursor: pointer; border: 0.5px solid var(--border-strong); background: var(--surface); margin-right: -1px; transition: all 0.15s; font-weight: 500; }
+  .type-tab:first-child { border-radius: 6px 0 0 6px; }
+  .type-tab:last-child { border-radius: 0 6px 6px 0; margin-right: 0; }
+  .type-tab:hover { background: var(--surface-2); }
+  .type-tab.selected { background: var(--text); color: var(--surface); border-color: var(--text); z-index: 1; position: relative; }
+  
+  .schedule-list { background: var(--surface-2); border-radius: 6px; padding: 10px 12px; margin-top: 8px; }
+  .schedule-row { display: grid; grid-template-columns: 1fr 130px 30px; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 0.5px dashed var(--border); }
+  .schedule-row:last-child { border-bottom: none; }
+  .schedule-row input { font-size: 12px; padding: 5px 8px; }
+  .schedule-row .schedule-status { font-size: 11px; color: var(--text-3); }
+  .schedule-row.next-up { background: var(--warning-bg); margin: 0 -8px; padding: 6px 8px; border-radius: 4px; border: 0.5px solid var(--warning); }
+  .schedule-row.next-up .schedule-status { color: var(--warning); font-weight: 500; }
+  .schedule-row.passed input { color: var(--text-3); }
+  .schedule-empty { color: var(--text-3); font-size: 12px; padding: 8px 0; text-align: center; }
+  
+  .field-readonly { padding: 8px 12px; background: var(--surface-2); border-radius: 6px; font-size: 13px; color: var(--text-2); }
+  
+  .filter-chips { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .module-input-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .module-input-row input { flex: 1; }
+  
+  .today-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 16px 18px; margin-bottom: 12px; cursor: pointer; transition: all 0.15s; border-left: 3px solid transparent; }
+  .today-card:hover { background: var(--surface-2); }
+  .today-card.urgent { border-left-color: var(--danger); background: var(--danger-bg); }
+  .today-card.urgent:hover { background: #f9dada; }
+  .today-card.overdue { border-left-color: var(--warning); background: var(--warning-bg); }
+  .today-card.overdue:hover { background: #f5e2c1; }
+  .today-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .today-card-title { font-size: 15px; font-weight: 600; }
+  .today-card-path { font-size: 12px; color: var(--text-2); margin-bottom: 8px; }
+  .today-card-meta { display: flex; gap: 14px; font-size: 12px; color: var(--text-2); flex-wrap: wrap; }
+  
+  .notes-editor { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 20px 24px; min-height: 500px; }
+  .notes-editor textarea { width: 100%; min-height: 460px; border: none; padding: 0; resize: none; font-size: 14px; line-height: 1.8; background: transparent; }
+  .notes-editor textarea:focus { box-shadow: none; }
+  .notes-status { font-size: 11px; color: var(--text-3); text-align: right; margin-top: 8px; }
+  
+  .placeholder-page { text-align: center; padding: 80px 20px; }
+  .placeholder-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
+  .placeholder-title { font-size: 18px; font-weight: 500; margin-bottom: 8px; }
+  .placeholder-text { font-size: 13px; color: var(--text-2); max-width: 420px; margin: 0 auto; line-height: 1.7; }
+  
+  /* 日历页 */
+  .cal-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .cal-month-label { font-size: 17px; font-weight: 600; min-width: 110px; text-align: center; }
+  .cal-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-left: auto; font-size: 11px; align-items: center; }
+  .cal-legend-item { display: inline-flex; align-items: center; gap: 4px; color: var(--text-2); }
+  .cal-legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  
+  .color-swatch { width: 28px; height: 28px; border-radius: 6px; cursor: pointer; transition: all 0.15s; border: 2px solid transparent; box-shadow: 0 0 0 1px var(--border); }
+  .color-swatch:hover { transform: scale(1.1); }
+  .color-swatch.selected { border-color: var(--text); box-shadow: 0 0 0 1px var(--text), 0 2px 6px rgba(0,0,0,0.15); }
+  
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); border: 0.5px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+  .cal-weekday { padding: 8px 0; text-align: center; font-size: 11px; color: var(--text-2); background: var(--surface-2); border-right: 0.5px solid var(--border); font-weight: 500; }
+  .cal-weekday:last-child { border-right: none; }
+  
+  .cal-cell { min-height: 100px; max-height: 100px; padding: 4px 5px; border-top: 0.5px solid var(--border); border-right: 0.5px solid var(--border); cursor: pointer; transition: background 0.1s; overflow: hidden; display: flex; flex-direction: column; }
+  .cal-cell:nth-child(7n+7) { border-right: none; }
+  .cal-cell:hover { background: var(--surface-2); }
+  .cal-cell.other-month { color: var(--text-3); background: var(--bg); }
+  .cal-cell.other-month:hover { background: var(--surface-2); }
+  .cal-cell.today { background: var(--accent-bg); }
+  .cal-cell.today:hover { background: #d6e7f7; }
+  .cal-cell.selected { box-shadow: inset 0 0 0 2px var(--accent); }
+  
+  .cal-day-num { font-size: 11px; font-weight: 500; margin-bottom: 2px; flex-shrink: 0; }
+  .cal-events { display: flex; flex-direction: column; gap: 2px; min-height: 0; flex: 1; overflow: hidden; }
+  .cal-event { font-size: 10px; padding: 1px 5px; border-radius: 3px; color: white; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; line-height: 1.4; flex-shrink: 0; }
+  .cal-event:hover { opacity: 0.85; }
+  .cal-event.done { opacity: 0.5; text-decoration: line-through; }
+  .cal-more { font-size: 10px; color: var(--text-2); padding: 1px 5px; cursor: pointer; }
+  .cal-more:hover { color: var(--text); }
+  
+  .cal-day-detail { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 16px 18px; margin-top: 16px; }
+  .cal-day-detail-title { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+  .cal-day-event-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 0.5px solid var(--border); cursor: pointer; }
+  .cal-day-event-row:last-child { border-bottom: none; }
+  .cal-day-event-row:hover { background: var(--surface-2); margin: 0 -8px; padding: 8px 8px; border-radius: 4px; }
+  .cal-day-event-color { width: 4px; height: 28px; border-radius: 2px; flex-shrink: 0; }
+  .cal-day-event-info { flex: 1; min-width: 0; }
+  .cal-day-event-name { font-size: 13px; font-weight: 500; }
+  .cal-day-event-meta { font-size: 11px; color: var(--text-2); margin-top: 2px; }
+  
+  @media (max-width: 768px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; border-right: none; border-bottom: 0.5px solid var(--border); }
+    .main { padding: 16px; }
+    .task { grid-template-columns: 60px 1fr 80px; gap: 8px; font-size: 12px; }
+    .task > :nth-child(4), .task > :nth-child(5) { display: none; }
+  }
+  
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(60px); background: var(--text); color: var(--surface); padding: 10px 18px; border-radius: 8px; font-size: 13px; box-shadow: var(--shadow-lg); opacity: 0; transition: all 0.2s; z-index: 200; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">P</div>
+      <span>提醒助手</span>
+    </div>
+    
+    <div class="nav-section">
+      <div class="nav-item active" data-page="today" onclick="setPage('today')">
+        <span class="nav-icon">📍</span>
+        <span>今日任务</span>
+        <span class="count urgent" id="count-today">0</span>
+      </div>
+      <div class="nav-item" data-page="projects" onclick="setPage('projects')">
+        <span class="nav-icon">📂</span>
+        <span>全部项目</span>
+        <span class="count" id="count-all">0</span>
+      </div>
+      <div class="nav-item" data-page="done" onclick="setPage('done')">
+        <span class="nav-icon">✅</span>
+        <span>已完成</span>
+        <span class="count" id="count-done">0</span>
+      </div>
+      <div class="nav-item" data-page="calendar" onclick="setPage('calendar')">
+        <span class="nav-icon">📅</span>
+        <span>日历</span>
+      </div>
+      <div class="nav-item" data-page="notes" onclick="setPage('notes')">
+        <span class="nav-icon">📝</span>
+        <span>我的便签</span>
+      </div>
+      <div class="nav-item" data-page="email" onclick="setPage('email')">
+        <span class="nav-icon">📧</span>
+        <span>每日邮件</span>
+        <span class="count" style="background: var(--accent-bg); color: var(--accent);">即将开放</span>
+      </div>
+    </div>
+    
+    <div class="sidebar-bottom">
+      <div class="sidebar-action" onclick="exportData()">📤 导出数据</div>
+      <div class="sidebar-action" onclick="importData()">📥 导入数据</div>
+      <div class="sidebar-action" onclick="resetToDemo()">🔄 重置示例数据</div>
+      <div class="sidebar-action" onclick="restoreOldBackup()">⏪ 恢复旧版数据</div>
+      <div class="sidebar-action" onclick="showHelp()">❔ 使用说明</div>
+      <div style="font-size: 11px; color: var(--text-3); padding: 8px; margin-top: 8px;">
+        数据存储:浏览器本地<br>
+        建议每周导出备份
+      </div>
+    </div>
+  </aside>
+  
+  <main class="main">
+    <div class="header">
+      <div>
+        <div class="page-title" id="page-title">今日任务</div>
+        <div class="page-subtitle" id="page-subtitle">提醒在手,今日无忧</div>
+      </div>
+      <div class="toolbar" id="page-toolbar"></div>
+    </div>
+    
+    <div id="content"></div>
+  </main>
+</div>
+
+<div class="modal-bg" id="project-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="project-modal-title">新建项目</div>
+      <button class="close-btn" onclick="closeModal('project-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>项目名称 <span class="required">*</span></label>
+        <input type="text" id="proj-name" placeholder="例如:绝区零、白银之城">
+      </div>
+      <div class="field-row">
+        <div>
+          <label>项目代号</label>
+          <input type="text" id="proj-code" placeholder="如 ZZZ">
+        </div>
+        <div>
+          <label>图标</label>
+          <select id="proj-icon">
+            <optgroup label="预设图片">
+              <option value="img:zzz">🎮 绝区零</option>
+              <option value="img:silver">🎀 白银之城</option>
+              <option value="img:genshin">⚔️ 原神</option>
+              <option value="img:pixai">🎨 Pixai</option>
+            </optgroup>
+            <optgroup label="Emoji 图标">
+              <option value="🎮">🎮 游戏</option>
+              <option value="⚔️">⚔️ 剑</option>
+              <option value="🚂">🚂 列车</option>
+              <option value="🌟">🌟 星星</option>
+              <option value="🎨">🎨 调色盘</option>
+              <option value="📺">📺 屏幕</option>
+              <option value="🎯">🎯 靶心</option>
+              <option value="🏆">🏆 奖杯</option>
+              <option value="🌸">🌸 樱花</option>
+              <option value="🔥">🔥 火焰</option>
+              <option value="🌙">🌙 月亮</option>
+              <option value="✨">✨ 闪光</option>
+            </optgroup>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>预设模块 <span style="color: var(--text-3); font-weight: 400;">（仅模块名,无类型概念）</span></label>
+        <div id="module-inputs"></div>
+        <button class="small" onclick="addModuleInput()">+ 添加模块</button>
+      </div>
+      <div class="field">
+        <label>项目颜色 <span style="color: var(--text-3); font-weight: 400;">（用于日历区分项目,不选则自动分配）</span></label>
+        <div id="proj-color-picker" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;"></div>
+      </div>
+      <div class="field">
+        <label>备注</label>
+        <textarea id="proj-note" placeholder="项目背景、注意事项等"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="closeModal('project-modal')">取消</button>
+      <button class="primary" onclick="saveProject()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="module-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="module-modal-title">新建模块</div>
+      <button class="close-btn" onclick="closeModal('module-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>所属项目</label>
+        <div class="field-readonly" id="module-game-name"></div>
+      </div>
+      <div class="field">
+        <label>模块名称 <span class="required">*</span></label>
+        <input type="text" id="module-name" placeholder="例如:JP 2.8版本、寿司郎联动、二测、馨西亚PV">
+      </div>
+      <div class="field">
+        <label>模块备注 <span style="color: var(--text-3); font-weight: 400;">（用于记录此模块下任务的总DDL或特别规则,会显示在主界面的模块标题旁）</span></label>
+        <textarea id="module-note" rows="3" placeholder="如:此模块所有KOL视频需在5/30前发布,品牌方周二审核"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="danger" onclick="deleteModule()" id="module-delete-btn" style="display:none; margin-right: auto;">删除模块</button>
+      <button onclick="closeModal('module-modal')">取消</button>
+      <button class="primary" onclick="saveModule()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="task-modal">
+  <div class="modal" style="max-width: 640px;">
+    <div class="modal-header">
+      <div class="modal-title" id="task-modal-title">新建任务</div>
+      <button class="close-btn" onclick="closeModal('task-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>所属位置</label>
+        <div class="field-readonly" id="task-location"></div>
+      </div>
+      
+      <div class="field">
+        <label>任务类型 <span class="required">*</span></label>
+        <div id="type-tabs" style="display: inline-flex;">
+          <span class="type-tab" data-type="kol" onclick="selectTaskType('kol')">KOL</span>
+          <span class="type-tab" data-type="artist" onclick="selectTaskType('artist')">画师</span>
+          <span class="type-tab" data-type="custom" onclick="selectTaskType('custom')">自定义 ▾</span>
+        </div>
+        <div id="custom-types-panel" style="display: none; background: var(--surface-2); border-radius: 6px; padding: 12px 14px; margin-top: 10px;">
+          <div style="font-size: 12px; color: var(--text-2); margin-bottom: 8px;">本项目下的自定义类型 <span style="color: var(--text-3); font-weight: 400; font-size: 11px;">（仅当前项目可用,可新建/重命名/删除）</span></div>
+          <div id="custom-types-pills" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;"></div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <input type="text" id="new-custom-type-name" placeholder="新自定义类型名,如「KOC」" style="flex: 1; font-size: 12px; padding: 6px 10px;" onkeydown="if(event.key==='Enter'){createCustomType();event.preventDefault();}">
+            <button class="small" onclick="createCustomType()">+ 创建</button>
+          </div>
+          <div id="custom-type-actions" style="margin-top: 8px; display: none;">
+            <button class="small ghost" onclick="renameCustomType()">重命名当前类型</button>
+            <button class="small ghost danger" onclick="deleteCustomType()">删除当前类型</button>
+          </div>
+        </div>
+      </div>
+      
+      <div class="field" id="task-name-single-field">
+        <label>任务名称 <span class="required">*</span></label>
+        <input type="text" id="task-name" placeholder="例如:KOL-小明、画师-Mira">
+      </div>
+      <div class="field" id="task-name-batch-field" style="display: none;">
+        <label>任务名称（批量）<span style="color: var(--text-3); font-weight: 400;">（每行一个）</span></label>
+        <textarea id="task-name-batch" rows="4" placeholder="KOL-小明
+KOL-阿橙
+KOL-Luna"></textarea>
+      </div>
+      <div class="field" id="batch-toggle-field">
+        <button class="small" onclick="toggleBatchMode()" id="batch-toggle-btn">切换为批量添加</button>
+      </div>
+      
+      <div class="field">
+        <label>当前进度 <span id="stage-type-hint" style="color: var(--text-3); font-weight: 400; font-size: 11px;"></span></label>
+        <div id="stage-pills"></div>
+        <div style="display: flex; gap: 8px; margin-top: 6px;">
+          <input type="text" id="custom-stage" placeholder="输入自定义进度,回车确定" style="flex: 1;" onkeydown="if(event.key==='Enter'){addCustomStage();event.preventDefault();}">
+          <button class="small" onclick="addCustomStage()">添加</button>
+        </div>
+      </div>
+      
+      <div class="field">
+        <label>真实排期 <span style="color: var(--text-3); font-weight: 400;">（粘贴日方/客户给的排期表,系统自动解析）</span></label>
+        <textarea id="schedule-input" rows="3" oninput="updateTrackRuleHint()" placeholder="支持粘贴中日英格式,例如:
+構成案提出：4月17日まで
+初稿動画提出：5月14日まで
+最終動画提出：5月18日まで"></textarea>
+        <div style="display: flex; gap: 8px; margin-top: 6px;">
+          <button class="small" onclick="parseSchedule()">📥 解析排期</button>
+          <button class="small" onclick="addManualMilestone()">+ 手动加里程碑</button>
+          <button class="small ghost danger" onclick="clearSchedule()" style="margin-left: auto;">清空排期</button>
+        </div>
+        <div class="schedule-list" id="schedule-list" style="display: none;"></div>
+      </div>
+      
+      <div class="field-row">
+        <div>
+          <label>截止日期 (DDL) <span style="color: var(--text-3); font-weight: 400; font-size: 11px;">最终交付日</span></label>
+          <input type="date" id="task-ddl">
+        </div>
+        <div>
+          <label>下次追踪日期 <span id="track-changed-mark" style="display:none; color: var(--warning); font-size: 11px;">⏱ 已调整</span></label>
+          <input type="date" id="task-track">
+        </div>
+      </div>
+      <div id="track-rule-info" style="margin-top: -6px; margin-bottom: 14px; padding: 8px 10px; background: var(--accent-bg); border-radius: 6px; font-size: 11px; color: var(--accent); line-height: 1.5; display: none;"></div>
+      
+      <div class="field" id="track-change-reason-field" style="display: none;">
+        <label>调整原因 <span style="color: var(--text-3); font-weight: 400;">（修改追踪日期时必填,会被记录）</span></label>
+        <input type="text" id="track-change-reason" placeholder="例如:KOL请假延期、品牌方审核中">
+      </div>
+      
+      <div class="field">
+        <label>备注</label>
+        <textarea id="task-note" placeholder="进度详情、沟通记录等"></textarea>
+      </div>
+      
+      <div class="field" id="history-section" style="display: none;">
+        <label>追踪时间变更记录</label>
+        <div class="history-list" id="history-list"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="danger" onclick="deleteTask()" id="task-delete-btn" style="display:none; margin-right: auto;">删除任务</button>
+      <button onclick="closeModal('task-modal')">取消</button>
+      <button class="primary" onclick="saveTask()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="mod-note-modal">
+  <div class="modal" style="max-width: 480px;">
+    <div class="modal-header">
+      <div class="modal-title" id="mod-note-modal-title" style="font-size: 14px;"></div>
+      <button class="close-btn" onclick="closeModal('mod-note-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size: 12px; color: var(--text-3); margin-bottom: 6px;">模块备注</div>
+      <div id="mod-note-modal-body" style="white-space: pre-wrap; line-height: 1.7; color: var(--text); padding: 10px 12px; background: var(--surface-2); border-radius: 6px; max-height: 400px; overflow-y: auto;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="primary" onclick="closeModal('mod-note-modal')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="help-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">使用说明</div>
+      <button class="close-btn" onclick="closeModal('help-modal')">×</button>
+    </div>
+    <div class="modal-body" style="line-height: 1.8;">
+      <h3 style="font-size: 14px; margin: 12px 0 6px;">任务类型与进度阶段</h3>
+      <p style="font-size: 13px; color: var(--text-2);">
+        新建任务时第一步选类型,然后阶段会自动切换:<br>
+        · <strong>KOL</strong>:背调中→首封邮件→NDA→已报价→已给orien→档期确定→确定合作→合同签署→排期提交→脚本提交→初稿提交→视频修改→完稿→发布<br>
+        · <strong>画师</strong>:背调中→首封邮件→NDA→已报价→已给bre→档期确定→确定合作→排期提交→草图提交→线稿提交→色稿提交→完稿→发布<br>
+        · <strong>自定义</strong>:每个项目可独立创建自定义类型(如「直播开播」、「KOC」),各自管理阶段流程
+      </p>
+      
+      <h3 style="font-size: 14px; margin: 16px 0 6px;">真实排期智能解析 ⭐</h3>
+      <p style="font-size: 13px; color: var(--text-2);">
+        把日方/客户给的排期表(如下)直接粘贴进任务的"真实排期"框,点解析:<br>
+        <code style="background: var(--surface-2); padding: 4px 8px; display: block; margin: 4px 0; border-radius: 4px; font-size: 12px;">構成案提出:4月17日まで<br>初稿動画提出:5月14日まで<br>公開予定日:5月20日まで</code>
+      </p>
+      <p style="font-size: 13px; color: var(--text-2); margin-top: 10px;">
+        <strong>支持的日期格式</strong>:<br>
+        · 完整年月日:<code style="font-size: 12px;">2026年4月17日</code> / <code style="font-size: 12px;">2026/4/17</code> / <code style="font-size: 12px;">2026-04-17</code> / <code style="font-size: 12px;">2026.4.17</code><br>
+        · 8位连续:<code style="font-size: 12px;">20260417</code><br>
+        · 中日文月日:<code style="font-size: 12px;">4月17日</code> / <code style="font-size: 12px;">4月17</code> / <code style="font-size: 12px;">4月17日まで</code> / <code style="font-size: 12px;">7月10日(木)</code>(日方括号星期会被自动忽略)<br>
+        · 各种简写:<code style="font-size: 12px;">04.17</code> / <code style="font-size: 12px;">4-17</code> / <code style="font-size: 12px;">4/17</code> / <code style="font-size: 12px;">0417</code><br>
+        · 英文月份:<code style="font-size: 12px;">April 17</code> / <code style="font-size: 12px;">Apr 17</code><br>
+        · 没填年份的格式系统会智能猜:今年的这天还没过就用今年,过了就用明年
+      </p>
+      <p style="font-size: 13px; color: var(--text-2); margin-top: 10px;">
+        <strong>如何让追踪自动进入下一阶段</strong>:<br>
+        · 当前阶段的排期已完成时,在里程碑处<strong>手动删除</strong>这一行排期(点 × ),系统会自动找到下一个未过的里程碑,继续追踪<br>
+        · ⚠️ 注意:任务编辑里的<strong>「当前进度」并不影响排期追踪</strong>,它只是给使用者自己提醒用的<br>
+        · 修改排期时,最好<strong>同时手动调整「当前进度」</strong>,避免认知混淆
+      </p>
+      
+      <h3 style="font-size: 14px; margin: 16px 0 6px;">追踪日规则</h3>
+      <p style="font-size: 13px; color: var(--text-2);">
+        · 没填真实排期:每3个自然日提醒一次<br>
+        · 填了真实排期:追踪日永远是"下个未过里程碑前1天"<br>
+        · 手动改追踪日必须填原因,所有变更都有记录
+      </p>
+      
+      <h3 style="font-size: 14px; margin: 16px 0 6px;">数据备份 ⚠️</h3>
+      <p style="font-size: 13px; color: var(--text-2);">数据存在浏览器本地。务必每周导出JSON备份,避免清浏览器数据时丢失。</p>
+    </div>
+    <div class="modal-footer">
+      <button class="primary" onclick="closeModal('help-modal')">知道了</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="import-file" accept=".json" style="display:none;" onchange="handleImport(event)">
+
+<script>
+const STORAGE_KEY = 'project_tracker_data_v3';
+const STORAGE_KEY_OLD_KEYS = ['project_tracker_data_v1'];
+
+const GAME_ICONS = {
+  zzz: 'data:image/jpeg;base64,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',
+  silver: 'data:image/jpeg;base64,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',
+  genshin: 'data:image/jpeg;base64,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',
+  pixai: 'data:image/jpeg;base64,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',
+};
+
+
+// 内置任务类型(KOL/画师固定),自定义类型在每个项目的customTypes里独立管理
+const TASK_TYPES = {
+  kol: {
+    label: 'KOL',
+    stages: [
+      { name: '背调中', type: 'gray' },
+      { name: '首封邮件', type: 'gray' },
+      { name: 'NDA', type: 'gray' },
+      { name: '已报价', type: 'info' },
+      { name: '已给orien', type: 'info' },
+      { name: '档期确定', type: 'info' },
+      { name: '确定合作', type: 'purple' },
+      { name: '合同签署', type: 'purple' },
+      { name: '排期提交', type: 'warning' },
+      { name: '脚本提交', type: 'warning' },
+      { name: '初稿提交', type: 'warning' },
+      { name: '视频修改', type: 'danger' },
+      { name: '完稿', type: 'success' },
+      { name: '发布', type: 'success' },
+    ]
+  },
+  artist: {
+    label: '画师',
+    stages: [
+      { name: '背调中', type: 'gray' },
+      { name: '首封邮件', type: 'gray' },
+      { name: 'NDA', type: 'gray' },
+      { name: '已报价', type: 'info' },
+      { name: '已给bre', type: 'info' },
+      { name: '档期确定', type: 'info' },
+      { name: '确定合作', type: 'purple' },
+      { name: '排期提交', type: 'warning' },
+      { name: '草图提交', type: 'warning' },
+      { name: '线稿提交', type: 'warning' },
+      { name: '色稿提交', type: 'warning' },
+      { name: '完稿', type: 'success' },
+      { name: '发布', type: 'success' },
+    ]
+  }
+};
+
+// 新项目默认自带的自定义类型(用户可增删)
+const DEFAULT_CUSTOM_TYPES = [
+  { name: '结案/数据收集', stages: [] },
+  { name: '提案/提名', stages: [] },
+  { name: '线下活动', stages: [] },
+  { name: 'KOC', stages: [] },
+];
+
+// 项目颜色:固定项目用指定色,其他项目从轮换色卡里挑
+const FIXED_PROJECT_COLORS = {
+  'g_zzz': { bg: '#7F77DD', label: '紫' },        // 绝区零
+  'g_genshin': { bg: '#639922', label: '绿' },    // 原神
+  'g_silver': { bg: '#D4537E', label: '粉' },     // 白银之城
+  'g_pixai': { bg: '#854F0B', label: '棕' },      // Pixai
+};
+
+// 用户在新建/编辑项目时可选的色卡(12种)
+const COLOR_PALETTE = [
+  { bg: '#7F77DD', label: '紫' },
+  { bg: '#639922', label: '绿' },
+  { bg: '#D4537E', label: '粉' },
+  { bg: '#854F0B', label: '棕' },
+  { bg: '#378ADD', label: '蓝' },
+  { bg: '#1D9E75', label: '青' },
+  { bg: '#D85A30', label: '橙' },
+  { bg: '#BA7517', label: '琥珀' },
+  { bg: '#5F5E5A', label: '深灰' },
+  { bg: '#A32D2D', label: '红' },
+  { bg: '#534AB7', label: '深紫' },
+  { bg: '#993556', label: '深粉' },
+];
+
+// 兜底:没用户选过,从COLOR_PALETTE按id哈希
+const FALLBACK_COLOR_PALETTE = COLOR_PALETTE;
+
+// 给一个项目返回其颜色
+function getProjectColor(game) {
+  if (game.color) return { bg: game.color, label: '' };  // 用户自定义颜色优先
+  if (FIXED_PROJECT_COLORS[game.id]) return FIXED_PROJECT_COLORS[game.id];
+  // 兜底:用项目id字符串哈希到色卡
+  let h = 0;
+  for (let i = 0; i < game.id.length; i++) h = (h * 31 + game.id.charCodeAt(i)) | 0;
+  const idx = Math.abs(h) % FALLBACK_COLOR_PALETTE.length;
+  return FALLBACK_COLOR_PALETTE[idx];
+}
+
+// 给每个项目分配独立的customTypes(深拷贝模板)
+function buildDefaultCustomTypes() {
+  return DEFAULT_CUSTOM_TYPES.map(t => ({
+    id: uid(),
+    name: t.name,
+    stages: t.stages.map(s => ({...s}))
+  }));
+}
+
+const DEFAULT_TRACK_INTERVAL = 3;
+
+function getDefaultData() {
+  return {
+    games: [],
+    customStages: { kol: [], artist: [], custom: [] },
+    notes: '',
+    settings: { tipShown: false }
+  };
+}
+
+function getDemoData() {
+  const today = new Date();
+  const fmt = (d) => d.toISOString().split('T')[0];
+  const offset = (n) => fmt(new Date(today.getTime() + n * 86400000));
+  
+  return {
+    games: [
+      {
+        id: 'g_zzz', name: '绝区零', code: 'ZZZ', icon: 'img:zzz', note: '示例项目',
+        modules: [
+          {
+            id: 'm_zzz_28', name: 'JP 2.8版本',
+            tasks: [
+              { id: 't1', name: 'KOL-小明', type: 'kol',
+                stage: '脚本提交', stageType: 'warning',
+                ddl: offset(0), nextTrack: offset(0),
+                schedule: [
+                  { id: 's1', name: '構成案提出', date: offset(-15), passed: true },
+                  { id: 's2', name: '脚本提交', date: offset(0), passed: false },
+                  { id: 's3', name: '初稿提交', date: offset(8), passed: false },
+                  { id: 's4', name: '最終動画提出', date: offset(13), passed: false },
+                  { id: 's5', name: '公開予定日', date: offset(15), passed: false },
+                ],
+                scheduleRaw: '構成案提出：' + (today.getMonth()+1) + '月' + (new Date(today.getTime()-15*86400000)).getDate() + '日まで\n脚本提交：今天\n初稿提交:8天后',
+                note: '今日截稿,已催两次',
+                history: [{ from: offset(-2), to: offset(0), reason: 'KOL请假延期', when: new Date(today.getTime()-3*86400000).toISOString() }],
+                done: false },
+              { id: 't2', name: '画师-Mira', type: 'artist',
+                stage: '线稿提交', stageType: 'warning',
+                ddl: offset(0), nextTrack: offset(0),
+                schedule: [],
+                scheduleRaw: '',
+                note: '线稿今天到,需review',
+                history: [], done: false },
+              { id: 't3', name: 'KOL-Luna', type: 'kol',
+                stage: '完稿', stageType: 'success',
+                ddl: offset(3), nextTrack: offset(2),
+                schedule: [],
+                scheduleRaw: '',
+                note: '准备发布',
+                history: [], done: false },
+            ]
+          },
+          { id: 'm_zzz_sushiro', name: 'JP 寿司郎联动', tasks: [] },
+          {
+            id: 'm_zzz_la', name: 'EN 拉美KOL',
+            tasks: [
+              { id: 't_la1', name: 'KOL-Carlos', type: 'kol',
+                stage: '已报价', stageType: 'info',
+                ddl: '', nextTrack: offset(3),
+                schedule: [], scheduleRaw: '',
+                note: '报价已发,等回复',
+                history: [], done: false },
+            ]
+          },
+          { id: 'm_zzz_30', name: 'JP 3.0版本', tasks: [] },
+        ],
+        customTypes: [
+          { id: 'ct_zzz_a', name: '结案/数据收集', stages: [] },
+          { id: 'ct_zzz_b', name: '提案/提名', stages: [] },
+          { id: 'ct_zzz_c', name: '线下活动', stages: [] },
+          { id: 'ct_zzz_d', name: 'KOC', stages: [] },
+        ]
+      },
+      {
+        id: 'g_silver', name: '白银之城', code: '', icon: 'img:silver', note: '',
+        modules: [
+          { id: 'm_silver_2', name: '二测', tasks: [] },
+          { id: 'm_silver_3', name: '三测', tasks: [] },
+          { id: 'm_silver_pv', name: '馨西亚PV', tasks: [] },
+          { id: 'm_silver_open', name: '公测', tasks: [] },
+        ],
+        customTypes: [
+          { id: 'ct_silver_a', name: '结案/数据收集', stages: [] },
+          { id: 'ct_silver_b', name: '提案/提名', stages: [] },
+          { id: 'ct_silver_c', name: '线下活动', stages: [] },
+          { id: 'ct_silver_d', name: 'KOC', stages: [] },
+        ]
+      },
+      {
+        id: 'g_pixai', name: 'Pixai', code: '', icon: 'img:pixai', note: '',
+        modules: [],
+        customTypes: [
+          { id: 'ct_pixai_a', name: '结案/数据收集', stages: [] },
+          { id: 'ct_pixai_b', name: '提案/提名', stages: [] },
+          { id: 'ct_pixai_c', name: '线下活动', stages: [] },
+          { id: 'ct_pixai_d', name: 'KOC', stages: [] },
+        ]
+      },
+      {
+        id: 'g_genshin', name: '原神', code: 'GI', icon: 'img:genshin', note: '',
+        modules: [],
+        customTypes: [
+          { id: 'ct_genshin_a', name: '结案/数据收集', stages: [] },
+          { id: 'ct_genshin_b', name: '提案/提名', stages: [] },
+          { id: 'ct_genshin_c', name: '线下活动', stages: [] },
+          { id: 'ct_genshin_d', name: 'KOC', stages: [] },
+        ]
+      },
+    ],
+    customStages: { kol: [], artist: [], custom: [] },
+    notes: '',
+    settings: { tipShown: false }
+  };
+}
+
+let data = loadData();
+
+function loadData() {
+  try {
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      // v3 首次打开: 检查是否有 v1/v2 旧数据
+      let oldFound = null;
+      for (const oldKey of STORAGE_KEY_OLD_KEYS) {
+        const oldRaw = localStorage.getItem(oldKey);
+        if (oldRaw) { oldFound = { key: oldKey, raw: oldRaw }; break; }
+      }
+      
+      if (oldFound) {
+        // 把旧数据另存为备份 key,然后用 v3 demo 初始化
+        try {
+          localStorage.setItem('project_tracker_backup_' + oldFound.key, oldFound.raw);
+        } catch (e) {}
+        // 提示用户(延后到render之后再toast)
+        setTimeout(() => {
+          showToast('检测到旧版数据,已自动备份。当前显示新版示例,可在使用说明里恢复旧数据');
+        }, 500);
+      }
+      
+      return getDemoData();
+    }
+    
+    // 已有 v3 数据,正常加载
+    const loaded = JSON.parse(raw);
+    if (!loaded.games) loaded.games = [];
+    if (!loaded.customStages || Array.isArray(loaded.customStages)) loaded.customStages = { kol: [], artist: [], custom: [] };
+    if (!loaded.notes) loaded.notes = '';
+    if (!loaded.settings) loaded.settings = { tipShown: false };
+    loaded.games.forEach(g => {
+      // 老数据没有 customTypes,补上默认的
+      if (!g.customTypes || !Array.isArray(g.customTypes)) {
+        g.customTypes = buildDefaultCustomTypes();
+      }
+      g.modules?.forEach(m => {
+        delete m.type;
+        m.tasks?.forEach(t => {
+          if (!t.type) t.type = 'kol';  // 缺失就当KOL
+          // 老的 type='custom' 映射到第一个 customType
+          if (t.type === 'custom' && g.customTypes.length > 0) {
+            t.type = 'custom:' + g.customTypes[0].id;
+          }
+          if (!t.history) t.history = [];
+          if (!t.schedule) t.schedule = [];
+          if (t.scheduleRaw === undefined) t.scheduleRaw = '';
+        });
+      });
+    });
+    return loaded;
+  } catch (e) {
+    console.error('加载数据失败:', e);
+    return getDefaultData();
+  }
+}
+
+// 把旧版本数据从备份中恢复(用户手动调用)
+function restoreOldBackup() {
+  for (const oldKey of STORAGE_KEY_OLD_KEYS) {
+    const backup = localStorage.getItem('project_tracker_backup_' + oldKey);
+    if (backup) {
+      try {
+        const old = JSON.parse(backup);
+        if (!confirm(`确定恢复来自旧版本(${oldKey})的数据吗?当前的所有数据会被覆盖!`)) return;
+        const migrated = migrateOldData(old);
+        data = migrated;
+        saveData();
+        render();
+        showToast('已恢复旧版数据');
+        return;
+      } catch (e) {
+        showToast('恢复失败:' + e.message);
+        return;
+      }
+    }
+  }
+  showToast('没有找到旧版数据备份');
+}
+
+// 重置为初始示例数据
+function resetToDemo() {
+  if (!confirm('确定重置为初始示例数据吗?当前的所有数据会被永久删除(建议先导出备份)!')) return;
+  data = getDemoData();
+  saveData();
+  render();
+  showToast('已重置为初始示例数据');
+}
+
+function migrateOldData(old) {
+  const migrated = {
+    games: old.games || [],
+    customStages: { kol: [], artist: [], custom: [] },
+    notes: '',
+    settings: old.settings || { tipShown: false }
+  };
+  migrated.games.forEach(g => {
+    if (!g.customTypes) g.customTypes = buildDefaultCustomTypes();
+    g.modules?.forEach(m => {
+      const inheritedType = m.type;
+      delete m.type;
+      m.tasks?.forEach(t => {
+        if (!t.type) t.type = inheritedType || 'kol';
+        if (t.type === 'custom' && g.customTypes.length > 0) {
+          t.type = 'custom:' + g.customTypes[0].id;
+        }
+        if (!t.history) t.history = [];
+        if (!t.schedule) t.schedule = [];
+        if (t.scheduleRaw === undefined) t.scheduleRaw = '';
+      });
+    });
+  });
+  return migrated;
+}
+
+function saveData() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    showToast('保存失败:' + e.message);
+  }
+}
+
+function uid() { return 'id_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8); }
+
+function todayStr() {
+  const d = new Date();
+  d.setHours(0,0,0,0);
+  return d.toISOString().split('T')[0];
+}
+
+function fmtDate(dStr) {
+  if (!dStr) return '—';
+  const d = new Date(dStr);
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  d.setHours(0,0,0,0);
+  const dayDiff = Math.floor((d - today) / 86400000);
+  if (dayDiff === 0) return '今天';
+  if (dayDiff === 1) return '明天';
+  if (dayDiff === -1) return '昨天';
+  if (dayDiff > 0 && dayDiff <= 7) return `${dayDiff}天后`;
+  if (dayDiff < 0 && dayDiff >= -7) return `${-dayDiff}天前`;
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  return `${m}/${day}`;
+}
+
+function fmtDateTime(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const h = d.getHours().toString().padStart(2, '0');
+  const min = d.getMinutes().toString().padStart(2, '0');
+  return `${m}/${day} ${h}:${min}`;
+}
+
+function dayDiff(dStr) {
+  if (!dStr) return null;
+  const d = new Date(dStr);
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  d.setHours(0,0,0,0);
+  return Math.floor((d - today) / 86400000);
+}
+
+// ============ 排期解析器 ============
+function parseScheduleText(text) {
+  if (!text || !text.trim()) return [];
+  
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const results = [];
+  
+  const monthMap = {
+    'jan':1,'january':1,'feb':2,'february':2,'mar':3,'march':3,'apr':4,'april':4,
+    'may':5,'jun':6,'june':6,'jul':7,'july':7,'aug':8,'august':8,'sep':9,'sept':9,
+    'september':9,'oct':10,'october':10,'nov':11,'november':11,'dec':12,'december':12
+  };
+  
+  lines.forEach(line => {
+    let year = null, month = null, day = null;
+    let dateMatchEnd = -1;
+    let dateMatchStart = -1;
+    let m;
+    
+    // 1. YYYYMMDD 连续8位(必须最先匹配,前后不能是数字)
+    m = line.match(/(?<!\d)(\d{4})(\d{2})(\d{2})(?!\d)/);
+    if (m) {
+      const y = parseInt(m[1]), mo = parseInt(m[2]), d = parseInt(m[3]);
+      // 合理性校验:年份在1990-2099,月份1-12,日1-31
+      if (y >= 1990 && y <= 2099 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+        year = y; month = mo; day = d;
+        dateMatchStart = m.index;
+        dateMatchEnd = m.index + m[0].length;
+      }
+    }
+    
+    // 2. YYYY[年/-.]MM[月/-.]DD (带年份的常规格式)
+    if (!month) {
+      m = line.match(/(\d{4})[年\/\-\.](\d{1,2})[月\/\-\.](\d{1,2})日?(まで)?/);
+      if (m) {
+        year = parseInt(m[1]);
+        month = parseInt(m[2]);
+        day = parseInt(m[3]);
+        dateMatchStart = m.index;
+        dateMatchEnd = m.index + m[0].length;
+      }
+    }
+    
+    // 3. X月Y日(可选)+可选括号星期(月火水木金土日)+可选まで
+    if (!month) {
+      m = line.match(/(\d{1,2})月(\d{1,2})日?[(（]?[月火水木金土日]?[)）]?(まで)?/);
+      if (m) {
+        month = parseInt(m[1]);
+        day = parseInt(m[2]);
+        dateMatchStart = m.index;
+        dateMatchEnd = m.index + m[0].length;
+      }
+    }
+    
+    // 4. MM.DD (前后不能是数字或点,避免和2026.04.17冲突)
+    if (!month) {
+      m = line.match(/(?<![\d\.])(\d{1,2})\.(\d{1,2})(?![\d\.])/);
+      if (m) {
+        month = parseInt(m[1]);
+        day = parseInt(m[2]);
+        dateMatchStart = m.index;
+        dateMatchEnd = m.index + m[0].length;
+      }
+    }
+    
+    // 5. MM-DD (前后不能是数字或短横线)
+    if (!month) {
+      m = line.match(/(?<![\d\-])(\d{1,2})-(\d{1,2})(?![\d\-])/);
+      if (m) {
+        month = parseInt(m[1]);
+        day = parseInt(m[2]);
+        dateMatchStart = m.index;
+        dateMatchEnd = m.index + m[0].length;
+      }
+    }
+    
+    // 6. MM/DD (前后不能是数字或斜杠)
+    if (!month) {
+      m = line.match(/(?<![\d\/])(\d{1,2})\/(\d{1,2})(?![\d\/])/);
+      if (m) {
+        month = parseInt(m[1]);
+        day = parseInt(m[2]);
+        dateMatchStart = m.index;
+        dateMatchEnd = m.index + m[0].length;
+      }
+    }
+    
+    // 7. 英文月份
+    if (!month) {
+      const monthPattern = Object.keys(monthMap).join('|');
+      const re = new RegExp('(' + monthPattern + ')\\.?\\s+(\\d{1,2})', 'i');
+      m = line.match(re);
+      if (m) {
+        month = monthMap[m[1].toLowerCase()];
+        day = parseInt(m[2]);
+        dateMatchStart = m.index;
+        dateMatchEnd = m.index + m[0].length;
+      }
+    }
+    
+    // 8. MMDD 4位连续数字兜底
+    // 严格规则:前面必须是行首、空白、分隔符或汉字
+    //         后面不能是数字/点/横线/斜杠/字母/号(避免编号误识别)
+    // 故意排除"前面是字母"的情况(如ABC0417),避免误识别项目编号
+    if (!month) {
+      m = line.match(/(?:^|[\s:：,，、"'"'(\(\u4e00-\u9fff])(\d{2})(\d{2})(?![\d\.\-\/A-Za-z号])/);
+      if (m) {
+        const mo = parseInt(m[1]), d = parseInt(m[2]);
+        if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+          month = mo;
+          day = d;
+          const fullMatch = m[0];
+          const numStart = m.index + (fullMatch.length - 4);
+          dateMatchStart = numStart;
+          dateMatchEnd = numStart + 4;
+        }
+      }
+    }
+    
+    if (month && day && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      if (!year) {
+        year = currentYear;
+        const guess = new Date(year, month - 1, day);
+        const sixMonthsAgo = new Date(today.getTime() - 180 * 86400000);
+        if (guess < sixMonthsAgo) year++;
+      }
+      
+      let name = '';
+      const beforeText = dateMatchStart > 0 ? line.substring(0, dateMatchStart) : '';
+      const afterText = dateMatchEnd < line.length ? line.substring(dateMatchEnd) : '';
+      
+      // 清理前后:去除标点空白等
+      const cleanRe = /^[:：、,，\s\(\)（）"'"']+|[:：、,，\s\(\)（）"'"']+$/g;
+      const beforeClean = beforeText.replace(cleanRe, '').trim();
+      const afterClean = afterText.replace(cleanRe, '').replace(/^まで|^前/, '').trim();
+      
+      // 哪边有实质内容用哪边;两边都有用前面;两边都没有就是"里程碑"
+      if (beforeClean && afterClean) {
+        name = beforeClean;
+      } else if (beforeClean) {
+        name = beforeClean;
+      } else if (afterClean) {
+        name = afterClean;
+      }
+      
+      name = name.replace(/まで$/g, '').replace(/前$/g, '').trim();
+      if (!name) name = '里程碑';
+      
+      const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      results.push({
+        id: uid(),
+        name: name,
+        date: dateStr,
+        passed: false
+      });
+    }
+  });
+  
+  return results;
+}
+
+function updateMilestonePassedFlag(schedule) {
+  const today = todayStr();
+  schedule.forEach(s => {
+    s.passed = s.date < today;
+  });
+}
+
+function getNextMilestone(schedule) {
+  if (!schedule || schedule.length === 0) return null;
+  const today = todayStr();
+  const sorted = [...schedule].sort((a, b) => a.date.localeCompare(b.date));
+  for (const s of sorted) {
+    if (s.date >= today) return s;
+  }
+  return null;
+}
+
+function computeTrackDateFromSchedule(schedule) {
+  const next = getNextMilestone(schedule);
+  if (!next) return null;
+  const d = new Date(next.date);
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().split('T')[0];
+}
+
+function getCountdownInfo(task) {
+  if (!task.schedule || task.schedule.length === 0) return null;
+  updateMilestonePassedFlag(task.schedule);
+  const next = getNextMilestone(task.schedule);
+  if (!next) return null;
+  const diff = dayDiff(next.date);
+  return { name: next.name, date: next.date, daysLeft: diff };
+}
+
+// ============ 紧急度判断 ============
+function getUrgency(task) {
+  if (task.done) return 'done';
+  const today = todayStr();
+  
+  if (task.schedule && task.schedule.length > 0) {
+    updateMilestonePassedFlag(task.schedule);
+    const sorted = [...task.schedule].sort((a, b) => a.date.localeCompare(b.date));
+    const next = getNextMilestone(task.schedule);
+    
+    if (!next) {
+      // 全部里程碑都已过,但任务未完成 → 逾期
+      return 'overdue';
+    }
+    
+    const diff = dayDiff(next.date);
+    // 检查是否有"刚刚过去且任务未完成"的情况:最近的里程碑日期是昨天或更早
+    // 这种情况下应该提示逾期
+    // (但排期解析时passed已经过了,会被跳过,所以这里能进来说明next确实是未来日期)
+    
+    if (diff === 0 || diff === 1) return 'urgent';
+    if (diff <= 3 && diff > 1) return 'soon';
+    if (diff < 0) return 'overdue';  // 理论上不会发生,因为next是 >= today
+    return 'normal';
+  }
+  
+  if (task.ddl && task.ddl < today) return 'overdue';
+  if (task.ddl === today || task.nextTrack === today) return 'urgent';
+  if (task.ddl) {
+    const diff = dayDiff(task.ddl);
+    if (diff !== null && diff <= 3 && diff > 0) return 'soon';
+  }
+  return 'normal';
+}
+
+function urgencyOrder(u) {
+  const map = { overdue: 0, urgent: 1, soon: 2, normal: 3, done: 4 };
+  return u in map ? map[u] : 5;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+// ============ 状态 ============
+let currentPage = 'today';
+let expanded = {};
+let showDoneInProjects = false;  // "全部项目"页是否显示已完成任务
+let calendarYear = new Date().getFullYear();
+let calendarMonth = new Date().getMonth();  // 0-11
+let calendarSelectedDate = null;  // 当前点击选中查看详情的日期 'YYYY-MM-DD'
+let currentEditingProject = null;
+let currentEditingModule = null;
+let currentEditingTask = null;
+let currentTaskContext = null;
+let currentModuleContext = null;
+let originalTrackDate = null;
+let selectedStage = null;
+let stageType = 'gray';
+let currentTaskType = 'kol';
+let batchMode = false;
+let editingSchedule = [];
+
+// ============ 页面切换 ============
+function setPage(page) {
+  currentPage = page;
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.page === page);
+  });
+  render();
+}
+
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// 渲染游戏图标:支持 emoji 字符串 / "img:keyword" 引用内置图片 / "data:image/..."直接URL
+function renderIcon(icon, size) {
+  size = size || 24;
+  if (!icon) return `<span style="display:inline-block; width: ${size}px; text-align: center;">📁</span>`;
+  
+  if (typeof icon === 'string' && icon.startsWith('img:')) {
+    const key = icon.slice(4);
+    const url = GAME_ICONS[key];
+    if (url) {
+      return `<img src="${url}" alt="" style="width: ${size}px; height: ${size}px; border-radius: ${Math.round(size*0.25)}px; vertical-align: middle; object-fit: cover;">`;
+    }
+  }
+  if (typeof icon === 'string' && icon.startsWith('data:')) {
+    return `<img src="${icon}" alt="" style="width: ${size}px; height: ${size}px; border-radius: ${Math.round(size*0.25)}px; vertical-align: middle; object-fit: cover;">`;
+  }
+  // emoji 或普通字符
+  return `<span style="display:inline-block; width: ${size}px; height: ${size}px; line-height: ${size}px; text-align: center; font-size: ${Math.round(size*0.85)}px;">${escapeHtml(icon)}</span>`;
+}
+
+// 用于纯文本场景(field-readonly 之类),返回不带图片的备选字符
+function iconAsText(icon) {
+  if (!icon) return '📁';
+  if (typeof icon === 'string' && icon.startsWith('img:')) return '🎮';  // 图片在文本场景显示通用游戏图标
+  return icon;
+}
+
+// ============ 渲染入口 ============
+function render() {
+  renderCounts();
+  if (currentPage === 'today') renderToday();
+  else if (currentPage === 'projects') renderProjects();
+  else if (currentPage === 'done') renderDone();
+  else if (currentPage === 'calendar') renderCalendar();
+  else if (currentPage === 'notes') renderNotes();
+  else if (currentPage === 'email') renderEmail();
+}
+
+function renderCounts() {
+  let all = 0, today = 0, done = 0;
+  data.games.forEach(g => g.modules?.forEach(m => m.tasks?.forEach(t => {
+    if (t.done) { done++; return; }
+    all++;
+    const u = getUrgency(t);
+    if (u === 'urgent' || u === 'overdue') today++;
+  })));
+  const cAll = document.getElementById('count-all');
+  const cToday = document.getElementById('count-today');
+  const cDone = document.getElementById('count-done');
+  if (cAll) cAll.textContent = all;
+  if (cToday) cToday.textContent = today;
+  if (cDone) cDone.textContent = done;
+}
+
+// ============ 今日页 ============
+function renderToday() {
+  document.getElementById('page-title').textContent = '今日任务';
+  document.getElementById('page-subtitle').textContent = '提醒在手,今日无忧';
+  document.getElementById('page-toolbar').innerHTML = '';
+  
+  let urgentTasks = [];
+  let overdueTasks = [];
+  let soonTasks = [];
+  
+  data.games.forEach(g => g.modules?.forEach(m => m.tasks?.forEach(t => {
+    if (t.done) return;
+    const u = getUrgency(t);
+    const item = { task: t, game: g, module: m };
+    if (u === 'urgent') urgentTasks.push(item);
+    else if (u === 'overdue') overdueTasks.push(item);
+    else if (u === 'soon') soonTasks.push(item);
+  })));
+  
+  let html = `
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">今日要紧</div>
+        <div class="stat-value ${urgentTasks.length > 0 ? 'danger' : ''}">${urgentTasks.length}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">逾期</div>
+        <div class="stat-value ${overdueTasks.length > 0 ? 'warning' : ''}">${overdueTasks.length}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">即将到期</div>
+        <div class="stat-value">${soonTasks.length}</div>
+      </div>
+    </div>
+  `;
+  
+  if (overdueTasks.length === 0 && urgentTasks.length === 0 && soonTasks.length === 0) {
+    html += `
+      <div class="empty">
+        <div class="empty-icon">🎯</div>
+        <div class="empty-title">今天没有要紧的事</div>
+        <div class="empty-text">继续保持!可以去"全部项目"看看本周的安排</div>
+      </div>
+    `;
+  } else {
+    if (overdueTasks.length > 0) {
+      html += `<h3 style="font-size: 14px; margin: 20px 0 10px; color: var(--warning);">逾期 · ${overdueTasks.length} 项</h3>`;
+      overdueTasks.forEach(item => html += renderTodayCard(item, 'overdue'));
+    }
+    if (urgentTasks.length > 0) {
+      html += `<h3 style="font-size: 14px; margin: 20px 0 10px; color: var(--danger);">今日要紧 · ${urgentTasks.length} 项</h3>`;
+      urgentTasks.forEach(item => html += renderTodayCard(item, 'urgent'));
+    }
+    if (soonTasks.length > 0) {
+      html += `<h3 style="font-size: 14px; margin: 20px 0 10px; color: var(--text-2);">即将到期 · ${soonTasks.length} 项</h3>`;
+      soonTasks.forEach(item => html += renderTodayCard(item, 'soon'));
+    }
+  }
+  
+  document.getElementById('content').innerHTML = html;
+}
+
+function renderTodayCard({ task, game, module: mod }, urgency) {
+  const cd = getCountdownInfo(task);
+  const tinfo = resolveTaskTypeForGame(game, task.type);
+  const badgeColor = tinfo.kind === 'kol' ? 'info' : tinfo.kind === 'artist' ? 'warning' : 'purple';
+  const typeBadge = `<span class="badge ${badgeColor} tiny">${escapeHtml(tinfo.label)}</span>`;
+  const stageBadge = task.stage ? `<span class="badge ${task.stageType || 'gray'} tiny">${escapeHtml(task.stage)}</span>` : '';
+  
+  let metaParts = [];
+  if (cd) {
+    let cdText;
+    if (cd.daysLeft < 0) cdText = `${cd.name} 已逾期 ${-cd.daysLeft} 天`;
+    else if (cd.daysLeft === 0) cdText = `${cd.name} 今天到期`;
+    else if (cd.daysLeft === 1) cdText = `${cd.name} 明天到期`;
+    else cdText = `${cd.name} 还剩 ${cd.daysLeft} 天`;
+    metaParts.push(`📅 ${cdText}`);
+  } else {
+    if (task.ddl) metaParts.push(`DDL: ${fmtDate(task.ddl)}`);
+    if (task.nextTrack) metaParts.push(`追踪: ${fmtDate(task.nextTrack)}`);
+  }
+  if (task.note) metaParts.push(`${escapeHtml(task.note)}`);
+  
+  return `
+    <div class="today-card ${urgency}" onclick="openTaskModal('${task.id}')">
+      <div class="today-card-header">
+        ${typeBadge}
+        <span class="today-card-title">${escapeHtml(task.name)}</span>
+        ${stageBadge}
+      </div>
+      <div class="today-card-path">${renderIcon(game.icon, 18)} ${escapeHtml(game.name)} / ${escapeHtml(mod.name)}</div>
+      <div class="today-card-meta">${metaParts.map(p => `<span>${p}</span>`).join('')}</div>
+    </div>
+  `;
+}
+
+// ============ 项目页 ============
+function renderProjects() {
+  document.getElementById('page-title').textContent = '全部项目';
+  document.getElementById('page-subtitle').textContent = '一次输入换来一生提醒,别忘了输入!!';
+  document.getElementById('page-toolbar').innerHTML = `
+    <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); cursor: pointer; padding: 6px 12px; border: 0.5px solid var(--border-strong); border-radius: 6px; background: var(--surface);">
+      <input type="checkbox" id="show-done-toggle" ${showDoneInProjects ? 'checked' : ''} onchange="toggleShowDoneInProjects()" style="width: auto; margin: 0;">
+      显示已完成
+    </label>
+    <button onclick="openProjectModal()" class="primary">+ 新建项目</button>
+  `;
+  
+  let urgent = 0, soon = 0, overdue = 0, total = 0;
+  data.games.forEach(g => g.modules?.forEach(m => m.tasks?.forEach(t => {
+    if (t.done) return;
+    total++;
+    const u = getUrgency(t);
+    if (u === 'urgent') urgent++;
+    if (u === 'soon') soon++;
+    if (u === 'overdue') overdue++;
+  })));
+  
+  let html = `
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">今日待办</div>
+        <div class="stat-value ${urgent > 0 ? 'danger' : ''}">${urgent}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">本周DDL</div>
+        <div class="stat-value">${urgent + soon}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">逾期</div>
+        <div class="stat-value ${overdue > 0 ? 'warning' : ''}">${overdue}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">活跃任务</div>
+        <div class="stat-value">${total}</div>
+      </div>
+    </div>
+  `;
+  
+  if (data.games.length === 0) {
+    html += `
+      <div class="empty">
+        <div class="empty-icon">📂</div>
+        <div class="empty-title">还没有项目</div>
+        <div class="empty-text">点击右上角"+ 新建项目"开始追踪</div>
+      </div>
+    `;
+    document.getElementById('content').innerHTML = html;
+    return;
+  }
+  
+  html += '<div class="tree">';
+  data.games.forEach(game => {
+    const urgentCount = (game.modules || []).reduce((s, m) => 
+      s + (m.tasks || []).filter(t => !t.done && getUrgency(t) === 'urgent').length, 0);
+    const isOpen = expanded[game.id] !== false;
+    
+    html += `
+      <div class="game-header" onclick="toggleExpand('${game.id}')">
+        <svg class="caret ${isOpen ? 'open' : ''}" viewBox="0 0 12 12"><path d="M4 2 L8 6 L4 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span style="display: inline-flex; align-items: center;">${renderIcon(game.icon, 24)}</span>
+        <span class="game-name">${escapeHtml(game.name)}${game.code ? ` <span style="color: var(--text-3); font-size: 12px; font-weight: 400;">${escapeHtml(game.code)}</span>` : ''}</span>
+        ${urgentCount > 0 ? `<span class="badge danger">${urgentCount} 个今日</span>` : ''}
+        <div class="game-actions" onclick="event.stopPropagation()">
+          <button class="small" onclick="openModuleModal('${game.id}')">+ 模块</button>
+          <button class="small" onclick="openProjectModal('${game.id}')">编辑</button>
+          <button class="small danger" onclick="deleteGame('${game.id}')">删除</button>
+        </div>
+      </div>
+    `;
+    
+    if (isOpen) {
+      if (!game.modules || game.modules.length === 0) {
+        html += `<div style="padding: 16px 36px; color: var(--text-3); font-size: 13px;">还没有模块,<a onclick="openModuleModal('${game.id}')" style="color: var(--accent); cursor: pointer;">添加一个</a></div>`;
+      }
+      
+      (game.modules || []).forEach(mod => {
+        const modUrgent = (mod.tasks || []).filter(t => !t.done && getUrgency(t) === 'urgent').length;
+        const modOpen = expanded[mod.id] !== false;
+        
+        // 模块备注:方案B,独立第二行
+        let modNoteHtml = '';
+        if (mod.note && mod.note.trim()) {
+          const fullNote = mod.note.trim();
+          const truncated = fullNote.length > 80 ? fullNote.slice(0, 80) + '…' : fullNote;
+          modNoteHtml = `<div class="module-note-line" 
+            title="${escapeHtml(fullNote)}" 
+            onclick="event.stopPropagation(); showModuleNote('${mod.id}')">📌 ${escapeHtml(truncated)}</div>`;
+        }
+        
+        html += `
+          <div class="module">
+            <div class="module-header" onclick="toggleExpand('${mod.id}')">
+              <svg class="caret ${modOpen ? 'open' : ''}" viewBox="0 0 12 12"><path d="M4 2 L8 6 L4 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="module-name-fixed">${escapeHtml(mod.name)}</span>
+              ${modUrgent > 0 ? `<span class="badge danger tiny">${modUrgent}</span>` : ''}
+              <span style="flex: 1;"></span>
+              <div class="module-actions" onclick="event.stopPropagation()">
+                <button class="small" onclick="openTaskModal(null, '${game.id}', '${mod.id}')">+ 任务</button>
+                <button class="small" onclick="openModuleModal('${game.id}', '${mod.id}')">编辑</button>
+              </div>
+            </div>
+            ${modNoteHtml}
+        `;
+        
+        if (modOpen) {
+          const tasksFiltered = (mod.tasks || []).filter(t => showDoneInProjects ? true : !t.done);
+          const sorted = [...tasksFiltered].sort((a, b) => {
+            // 已完成的排在最后(如果显示了已完成)
+            if (a.done !== b.done) return a.done ? 1 : -1;
+            const ua = getUrgency(a), ub = getUrgency(b);
+            const oa = urgencyOrder(ua), ob = urgencyOrder(ub);
+            if (oa !== ob) return oa - ob;
+            if (a.ddl && b.ddl) return a.ddl.localeCompare(b.ddl);
+            return 0;
+          });
+          
+          if (sorted.length === 0) {
+            const allDone = (mod.tasks || []).length > 0 && (mod.tasks || []).every(t => t.done);
+            const hint = allDone ? '本模块任务都已完成,在「已完成」页查看' : '暂无任务';
+            html += `<div class="task-list"><div style="padding: 12px 0; color: var(--text-3); font-size: 13px;">${hint},<a onclick="openTaskModal(null, '${game.id}', '${mod.id}')" style="color: var(--accent); cursor: pointer;">添加一个</a></div></div>`;
+          } else {
+            html += '<div class="task-list">';
+            sorted.forEach(task => {
+              html += renderTaskRow(task, game);
+            });
+            html += '</div>';
+          }
+        }
+        html += '</div>';
+      });
+    }
+  });
+  html += '</div>';
+  
+  document.getElementById('content').innerHTML = html;
+}
+
+function renderTaskRow(task, game) {
+  const u = getUrgency(task);
+  const hasHistory = task.history && task.history.length > 0;
+  const cd = getCountdownInfo(task);
+  const tinfo = resolveTaskTypeForGame(game, task.type);
+  const badgeColor = tinfo.kind === 'kol' ? 'info' : tinfo.kind === 'artist' ? 'warning' : 'purple';
+  const typeBadge = `<span class="badge ${badgeColor} tiny">${escapeHtml(tinfo.label)}</span>`;
+  const stageBadge = task.stage ? `<span class="badge ${task.stageType || 'gray'} tiny">${escapeHtml(task.stage)}</span>` : '<span style="color: var(--text-3); font-size: 11px;">未设置</span>';
+  
+  let urgencyTag = '';
+  if (u === 'overdue') urgencyTag = '<span class="badge warning tiny">逾期</span>';
+  else if (u === 'urgent') urgencyTag = '<span class="badge danger tiny">今日</span>';
+  else if (u === 'soon') urgencyTag = '<span class="badge info tiny">3天内</span>';
+  
+  let countdownLine = '';
+  if (cd) {
+    let cdText, cdClass = '';
+    if (cd.daysLeft < 0) { cdText = `${cd.name} 已逾期 ${-cd.daysLeft} 天`; cdClass = 'overdue'; }
+    else if (cd.daysLeft === 0) { cdText = `${cd.name} 今天到期`; cdClass = 'urgent'; }
+    else if (cd.daysLeft === 1) { cdText = `${cd.name} 明天到期`; cdClass = 'urgent'; }
+    else cdText = `${cd.name} 还剩 ${cd.daysLeft} 天`;
+    countdownLine = `<div class="task-countdown ${cdClass}">📅 ${escapeHtml(cdText)}</div>`;
+  }
+  
+  // 备注行:超过60字截断,鼠标悬停看完整
+  let noteLine = '';
+  if (task.note && task.note.trim()) {
+    const fullNote = task.note.trim();
+    const truncated = fullNote.length > 60 ? fullNote.slice(0, 60) + '…' : fullNote;
+    noteLine = `<div class="task-note-line" title="${escapeHtml(fullNote)}">${escapeHtml(truncated)}</div>`;
+  }
+  
+  return `
+    <div class="task ${u}" onclick="openTaskModal('${task.id}')">
+      <span>${urgencyTag || '<span style="color: var(--text-3);">·</span>'}</span>
+      <div class="task-name">
+        <div class="task-name-row">
+          ${typeBadge}
+          <span class="task-name-text">${escapeHtml(task.name)}</span>
+          ${hasHistory ? '<span class="history-mark" title="追踪时间已调整">⏱</span>' : ''}
+        </div>
+        ${countdownLine}
+        ${noteLine}
+      </div>
+      <span>${stageBadge}</span>
+      <span style="color: var(--text-2); font-size: 12px;">${task.ddl ? 'DDL: ' + fmtDate(task.ddl) : ''}</span>
+      <span style="color: var(--text-2); font-size: 12px;">${task.nextTrack ? '追踪: ' + fmtDate(task.nextTrack) : ''}</span>
+      <span style="text-align: right;"><button class="small ghost" onclick="event.stopPropagation(); toggleDone('${task.id}')">${task.done ? '↻' : '✓'}</button></span>
+    </div>
+  `;
+}
+
+function toggleShowDoneInProjects() {
+  showDoneInProjects = !showDoneInProjects;
+  render();
+}
+
+// ============ 已完成页 ============
+function renderDone() {
+  document.getElementById('page-title').textContent = '已完成';
+  document.getElementById('page-subtitle').textContent = '历史归档,按完成时间倒序';
+  document.getElementById('page-toolbar').innerHTML = '';
+  
+  // 收集所有已完成任务,按 doneAt 倒序
+  let totalDone = 0;
+  let mostRecent = null;
+  data.games.forEach(g => g.modules?.forEach(m => m.tasks?.forEach(t => {
+    if (t.done) {
+      totalDone++;
+      if (!mostRecent || (t.doneAt && t.doneAt > mostRecent)) mostRecent = t.doneAt;
+    }
+  })));
+  
+  if (totalDone === 0) {
+    document.getElementById('content').innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">✅</div>
+        <div class="empty-title">还没有已完成的任务</div>
+        <div class="empty-text">完成的任务会自动归档到这里,可随时查看历史</div>
+      </div>
+    `;
+    return;
+  }
+  
+  let html = `
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">已完成总数</div>
+        <div class="stat-value">${totalDone}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">最近完成</div>
+        <div class="stat-value" style="font-size: 16px;">${mostRecent ? fmtDateTime(mostRecent) : '—'}</div>
+      </div>
+    </div>
+    <div class="tree">
+  `;
+  
+  // 镜像项目→模块→任务结构,但只显示有已完成任务的
+  data.games.forEach(game => {
+    // 这个项目下有多少已完成任务
+    const gameDoneCount = (game.modules || []).reduce((s, m) => 
+      s + (m.tasks || []).filter(t => t.done).length, 0);
+    if (gameDoneCount === 0) return;  // 没有已完成任务的项目跳过
+    
+    const isOpen = expanded['done_' + game.id] !== false;  // 默认展开
+    
+    html += `
+      <div class="game-header" onclick="toggleExpand('done_${game.id}')">
+        <svg class="caret ${isOpen ? 'open' : ''}" viewBox="0 0 12 12"><path d="M4 2 L8 6 L4 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span style="display: inline-flex; align-items: center;">${renderIcon(game.icon, 24)}</span>
+        <span class="game-name">${escapeHtml(game.name)}${game.code ? ` <span style="color: var(--text-3); font-size: 12px; font-weight: 400;">${escapeHtml(game.code)}</span>` : ''}</span>
+        <span class="badge gray">${gameDoneCount} 项已完成</span>
+      </div>
+    `;
+    
+    if (isOpen) {
+      (game.modules || []).forEach(mod => {
+        const modDoneTasks = (mod.tasks || []).filter(t => t.done);
+        if (modDoneTasks.length === 0) return;  // 没已完成任务的模块跳过
+        
+        const modOpen = expanded['done_' + mod.id] !== false;
+        
+        html += `
+          <div class="module">
+            <div class="module-header" onclick="toggleExpand('done_${mod.id}')">
+              <svg class="caret ${modOpen ? 'open' : ''}" viewBox="0 0 12 12"><path d="M4 2 L8 6 L4 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="module-name">${escapeHtml(mod.name)}</span>
+              <span class="badge gray tiny">${modDoneTasks.length}</span>
+            </div>
+        `;
+        
+        if (modOpen) {
+          // 按 doneAt 倒序排
+          const sorted = [...modDoneTasks].sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || ''));
+          html += '<div class="task-list">';
+          sorted.forEach(task => {
+            html += renderDoneTaskRow(task, game);
+          });
+          html += '</div>';
+        }
+        html += '</div>';
+      });
+    }
+  });
+  html += '</div>';
+  
+  document.getElementById('content').innerHTML = html;
+}
+
+function renderDoneTaskRow(task, game) {
+  const tinfo = resolveTaskTypeForGame(game, task.type);
+  const badgeColor = tinfo.kind === 'kol' ? 'info' : tinfo.kind === 'artist' ? 'warning' : 'purple';
+  const typeBadge = `<span class="badge ${badgeColor} tiny">${escapeHtml(tinfo.label)}</span>`;
+  const stageBadge = task.stage ? `<span class="badge ${task.stageType || 'gray'} tiny">${escapeHtml(task.stage)}</span>` : '';
+  
+  let noteLine = '';
+  if (task.note && task.note.trim()) {
+    const fullNote = task.note.trim();
+    const truncated = fullNote.length > 60 ? fullNote.slice(0, 60) + '…' : fullNote;
+    noteLine = `<div class="task-note-line" title="${escapeHtml(fullNote)}">${escapeHtml(truncated)}</div>`;
+  }
+  
+  const doneTimeStr = task.doneAt ? fmtDateTime(task.doneAt) : '—';
+  
+  return `
+    <div class="task" onclick="openTaskModal('${task.id}')" style="opacity: 0.85;">
+      <span><span class="badge success tiny">完成</span></span>
+      <div class="task-name">
+        <div class="task-name-row">
+          ${typeBadge}
+          <span class="task-name-text">${escapeHtml(task.name)}</span>
+        </div>
+        ${noteLine}
+      </div>
+      <span>${stageBadge}</span>
+      <span style="color: var(--text-2); font-size: 12px;">${task.ddl ? 'DDL: ' + fmtDate(task.ddl) : ''}</span>
+      <span style="color: var(--text-2); font-size: 12px;">完成: ${doneTimeStr}</span>
+      <span style="text-align: right;"><button class="small ghost" title="取消完成,回到全部项目" onclick="event.stopPropagation(); toggleDone('${task.id}')">↻</button></span>
+    </div>
+  `;
+}
+
+// ============ 日历页 ============
+
+// 收集所有任务的事件,按日期分组返回 map: 'YYYY-MM-DD' -> [event...]
+// event: { date, taskId, taskName, type ('milestone'), milestoneName, gameId, gameName, gameColor, taskType, stage, done }
+function collectCalendarEvents() {
+  const events = [];
+  data.games.forEach(game => {
+    const color = getProjectColor(game).bg;
+    (game.modules || []).forEach(mod => {
+      (mod.tasks || []).forEach(task => {
+        // 只有有真实排期(schedule)的任务才显示
+        if (!task.schedule || task.schedule.length === 0) return;
+        task.schedule.forEach(m => {
+          if (!m.date) return;
+          events.push({
+            date: m.date,
+            taskId: task.id,
+            taskName: task.name,
+            milestoneName: m.name,
+            gameId: game.id,
+            gameName: game.name,
+            gameIcon: game.icon,
+            gameColor: color,
+            taskType: task.type,
+            moduleName: mod.name,
+            done: task.done,
+          });
+        });
+      });
+    });
+  });
+  return events;
+}
+
+function groupEventsByDate(events) {
+  const map = {};
+  events.forEach(e => {
+    if (!map[e.date]) map[e.date] = [];
+    map[e.date].push(e);
+  });
+  return map;
+}
+
+function renderCalendar() {
+  document.getElementById('page-title').textContent = '日历';
+  document.getElementById('page-subtitle').textContent = '所有任务的排期里程碑,按项目颜色区分';
+  document.getElementById('page-toolbar').innerHTML = '';
+  
+  const events = collectCalendarEvents();
+  const eventsByDate = groupEventsByDate(events);
+  
+  // 收集本视图涉及的项目用于图例
+  const projectsInView = new Map();
+  data.games.forEach(g => {
+    const hasEvents = events.some(e => e.gameId === g.id);
+    if (hasEvents) {
+      projectsInView.set(g.id, { name: g.name, color: getProjectColor(g).bg });
+    }
+  });
+  
+  // 月视图基本数据
+  const firstDay = new Date(calendarYear, calendarMonth, 1);
+  const startDayOfWeek = firstDay.getDay();  // 0=Sun, 6=Sat
+  const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+  const todayStr_ = todayStr();
+  
+  // 标题(中文)
+  const monthLabel = `${calendarYear}年 ${calendarMonth + 1}月`;
+  
+  let html = `
+    <div class="cal-toolbar">
+      <button class="small" onclick="calNavMonth(-1)">‹ 上月</button>
+      <span class="cal-month-label">${monthLabel}</span>
+      <button class="small" onclick="calNavMonth(1)">下月 ›</button>
+      <button class="small" onclick="calGoToday()">今天</button>
+      
+      <div class="cal-legend">
+  `;
+  projectsInView.forEach(p => {
+    html += `<span class="cal-legend-item"><span class="cal-legend-dot" style="background:${p.color}"></span>${escapeHtml(p.name)}</span>`;
+  });
+  html += `</div></div>`;
+  
+  if (events.length === 0) {
+    html += `
+      <div class="empty">
+        <div class="empty-icon">📅</div>
+        <div class="empty-title">还没有排期可以显示</div>
+        <div class="empty-text">在任务里粘贴或手填「真实排期」,里程碑会自动出现在日历上</div>
+      </div>
+    `;
+    document.getElementById('content').innerHTML = html;
+    return;
+  }
+  
+  html += '<div class="cal-grid">';
+  ['日','一','二','三','四','五','六'].forEach(w => {
+    html += `<div class="cal-weekday">${w}</div>`;
+  });
+  
+  // 上月填充
+  const prevMonthDays = startDayOfWeek;
+  const prevMonthLastDay = new Date(calendarYear, calendarMonth, 0).getDate();
+  for (let i = 0; i < prevMonthDays; i++) {
+    const day = prevMonthLastDay - prevMonthDays + i + 1;
+    const d = new Date(calendarYear, calendarMonth - 1, day);
+    const dStr = d.toISOString().split('T')[0];
+    html += renderCalCell(dStr, day, true, eventsByDate[dStr] || [], todayStr_);
+  }
+  
+  // 当月
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(calendarYear, calendarMonth, d);
+    const dStr = date.toISOString().split('T')[0];
+    html += renderCalCell(dStr, d, false, eventsByDate[dStr] || [], todayStr_);
+  }
+  
+  // 下月填充(补满42格 = 6行)
+  const totalRendered = prevMonthDays + daysInMonth;
+  const tailDays = (totalRendered % 7 === 0) ? 0 : (7 - totalRendered % 7);
+  for (let i = 1; i <= tailDays; i++) {
+    const d = new Date(calendarYear, calendarMonth + 1, i);
+    const dStr = d.toISOString().split('T')[0];
+    html += renderCalCell(dStr, i, true, eventsByDate[dStr] || [], todayStr_);
+  }
+  
+  html += '</div>';
+  
+  // 当天详情区
+  if (calendarSelectedDate && eventsByDate[calendarSelectedDate]) {
+    html += renderCalDayDetail(calendarSelectedDate, eventsByDate[calendarSelectedDate]);
+  }
+  
+  document.getElementById('content').innerHTML = html;
+}
+
+function renderCalCell(dateStr, dayNum, isOtherMonth, events, todayStr_) {
+  const isToday = dateStr === todayStr_;
+  const isSelected = dateStr === calendarSelectedDate;
+  const classes = ['cal-cell'];
+  if (isOtherMonth) classes.push('other-month');
+  if (isToday) classes.push('today');
+  if (isSelected) classes.push('selected');
+  
+  // 显示前3个事件,多了显示+N更多
+  const MAX_VISIBLE = 3;
+  let eventsHtml = '';
+  
+  if (events.length > 0) {
+    const visible = events.slice(0, MAX_VISIBLE);
+    visible.forEach(e => {
+      // 文字: "人名 阶段"
+      const taskNameShort = e.taskName.length > 6 ? e.taskName.slice(0, 6) : e.taskName;
+      const text = `${taskNameShort} ${e.milestoneName}`;
+      const tooltip = `${e.gameName} / ${e.moduleName}\n${e.taskName} - ${e.milestoneName}`;
+      eventsHtml += `<div class="cal-event ${e.done ? 'done' : ''}" 
+        style="background:${e.gameColor}" 
+        title="${escapeHtml(tooltip)}"
+        onclick="event.stopPropagation(); openTaskModal('${e.taskId}')">${escapeHtml(text)}</div>`;
+    });
+    if (events.length > MAX_VISIBLE) {
+      const remain = events.length - MAX_VISIBLE;
+      eventsHtml += `<div class="cal-more" onclick="event.stopPropagation(); calSelectDate('${dateStr}')">+ ${remain} 更多</div>`;
+    }
+  }
+  
+  return `
+    <div class="${classes.join(' ')}" onclick="calSelectDate('${dateStr}')">
+      <div class="cal-day-num">${dayNum}</div>
+      <div class="cal-events">${eventsHtml}</div>
+    </div>
+  `;
+}
+
+function renderCalDayDetail(dateStr, events) {
+  const d = new Date(dateStr);
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const weekDays = ['周日','周一','周二','周三','周四','周五','周六'];
+  const wd = weekDays[d.getDay()];
+  
+  let html = `
+    <div class="cal-day-detail">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <div class="cal-day-detail-title">${m}月${day}日 · ${wd} · ${events.length} 个事件</div>
+        <button class="small ghost" onclick="calClearSelection()">关闭</button>
+      </div>
+  `;
+  events.forEach(e => {
+    html += `
+      <div class="cal-day-event-row" onclick="openTaskModal('${e.taskId}')">
+        <div class="cal-day-event-color" style="background: ${e.gameColor}"></div>
+        <div class="cal-day-event-info">
+          <div class="cal-day-event-name">${escapeHtml(e.taskName)} · ${escapeHtml(e.milestoneName)}${e.done ? ' <span class="badge gray tiny">已完成</span>' : ''}</div>
+          <div class="cal-day-event-meta">${escapeHtml(e.gameName)} / ${escapeHtml(e.moduleName)}</div>
+        </div>
+        <div style="font-size: 11px; color: var(--text-3);">点击编辑 ›</div>
+      </div>
+    `;
+  });
+  html += '</div>';
+  return html;
+}
+
+function calNavMonth(delta) {
+  const newDate = new Date(calendarYear, calendarMonth + delta, 1);
+  calendarYear = newDate.getFullYear();
+  calendarMonth = newDate.getMonth();
+  calendarSelectedDate = null;
+  render();
+}
+
+function calGoToday() {
+  const today = new Date();
+  calendarYear = today.getFullYear();
+  calendarMonth = today.getMonth();
+  calendarSelectedDate = null;
+  render();
+}
+
+function calSelectDate(dateStr) {
+  // 如果点的不是当月,跳到那个月
+  const d = new Date(dateStr);
+  if (d.getMonth() !== calendarMonth || d.getFullYear() !== calendarYear) {
+    calendarYear = d.getFullYear();
+    calendarMonth = d.getMonth();
+  }
+  calendarSelectedDate = dateStr;
+  render();
+}
+
+function calClearSelection() {
+  calendarSelectedDate = null;
+  render();
+}
+
+// ============ 便签页 ============
+function renderNotes() {
+  document.getElementById('page-title').textContent = '我的便签';
+  document.getElementById('page-subtitle').textContent = '随手记录,自动保存';
+  document.getElementById('page-toolbar').innerHTML = '';
+  
+  document.getElementById('content').innerHTML = `
+    <div class="notes-editor">
+      <textarea id="notes-textarea" placeholder="今天的临时todolist...
+
+可以写任何东西:
+· 接洽过程中的备忘
+· 灵感、想法
+· 待整理的信息
+· 临时的提醒事项
+
+内容会自动保存"></textarea>
+      <div class="notes-status" id="notes-status">已自动保存</div>
+    </div>
+  `;
+  
+  const textarea = document.getElementById('notes-textarea');
+  textarea.value = data.notes || '';
+  textarea.focus();
+  
+  let saveTimer = null;
+  textarea.oninput = function() {
+    document.getElementById('notes-status').textContent = '正在保存...';
+    document.getElementById('notes-status').style.color = 'var(--text-3)';
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      data.notes = textarea.value;
+      saveData();
+      document.getElementById('notes-status').textContent = '已自动保存 · ' + new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'});
+    }, 600);
+  };
+}
+
+// ============ 邮件页(占位) ============
+function renderEmail() {
+  document.getElementById('page-title').textContent = '每日邮件预览';
+  document.getElementById('page-subtitle').textContent = '从Gmail自动汇总今日要处理的邮件';
+  document.getElementById('page-toolbar').innerHTML = '';
+  
+  document.getElementById('content').innerHTML = `
+    <div class="placeholder-page">
+      <div class="placeholder-icon">📧</div>
+      <div class="placeholder-title">功能开发中</div>
+      <div class="placeholder-text">
+        这个页面将自动抓取你Gmail里打了指定标签的邮件,用AI做摘要和分类,帮你快速识别哪些是今天要处理的事情。<br><br>
+        实现这个功能需要部署到云端(Vercel + Supabase),会在第三阶段开发。<br><br>
+        <span style="color: var(--text-3); font-size: 12px;">当前阶段:第一阶段(本地版)</span>
+      </div>
+    </div>
+  `;
+}
+
+// ============ 折叠展开 ============
+function toggleExpand(id) {
+  expanded[id] = expanded[id] === false ? true : false;
+  render();
+}
+
+// ============ 项目编辑 ============
+let editingProjectColor = null;  // 当前选中的颜色
+
+function openProjectModal(gameId) {
+  currentEditingProject = gameId || null;
+  const game = gameId ? data.games.find(g => g.id === gameId) : null;
+  
+  document.getElementById('project-modal-title').textContent = game ? '编辑项目' : '新建项目';
+  document.getElementById('proj-name').value = game?.name || '';
+  document.getElementById('proj-code').value = game?.code || '';
+  document.getElementById('proj-icon').value = game?.icon || '🎮';
+  document.getElementById('proj-note').value = game?.note || '';
+  
+  // 颜色选择初始化
+  if (game) {
+    editingProjectColor = game.color || getProjectColor(game).bg;
+  } else {
+    editingProjectColor = null;  // 新建项目默认不选,自动分配
+  }
+  renderProjectColorPicker();
+  
+  const modulesContainer = document.getElementById('module-inputs');
+  modulesContainer.innerHTML = '';
+  
+  if (game) {
+    if (game.modules.length > 0) {
+      game.modules.forEach(m => {
+        modulesContainer.innerHTML += `
+          <div class="module-input-row">
+            <input type="text" value="${escapeHtml(m.name)}" disabled style="background: var(--surface-2); flex: 1;">
+            <span style="font-size: 11px; color: var(--text-3); min-width: 50px;">${m.tasks?.length || 0} 任务</span>
+          </div>
+        `;
+      });
+      modulesContainer.innerHTML += '<div style="font-size: 12px; color: var(--text-3); margin-top: 6px;">已有模块在主界面单独编辑</div>';
+    }
+  } else {
+    addModuleInput();
+  }
+  
+  document.getElementById('project-modal').classList.add('show');
+  setTimeout(() => document.getElementById('proj-name').focus(), 50);
+}
+
+function renderProjectColorPicker() {
+  const container = document.getElementById('proj-color-picker');
+  if (!container) return;
+  
+  // "自动"选项 + 12个色卡
+  let html = `<div class="color-swatch ${editingProjectColor === null ? 'selected' : ''}" 
+    onclick="selectProjectColor(null)" 
+    title="不选,系统自动分配"
+    style="background: linear-gradient(135deg, #ddd 25%, #eee 25%, #eee 50%, #ddd 50%, #ddd 75%, #eee 75%); position: relative;">
+    <span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; color: #888;">?</span>
+  </div>`;
+  
+  COLOR_PALETTE.forEach(c => {
+    const sel = editingProjectColor === c.bg;
+    html += `<div class="color-swatch ${sel ? 'selected' : ''}" 
+      onclick="selectProjectColor('${c.bg}')" 
+      title="${c.label}"
+      style="background: ${c.bg};"></div>`;
+  });
+  container.innerHTML = html;
+}
+
+function selectProjectColor(bg) {
+  editingProjectColor = bg;
+  renderProjectColorPicker();
+}
+
+function addModuleInput(value = '') {
+  if (currentEditingProject) return;
+  const container = document.getElementById('module-inputs');
+  const row = document.createElement('div');
+  row.className = 'module-input-row';
+  row.innerHTML = `
+    <input type="text" class="module-name-input" value="${escapeHtml(value)}" placeholder="模块名称(如「JP 2.8版本」)" style="flex: 1;">
+    <button class="small ghost" onclick="this.parentElement.remove()" style="min-width: 30px;">×</button>
+  `;
+  container.appendChild(row);
+}
+
+function saveProject() {
+  const name = document.getElementById('proj-name').value.trim();
+  if (!name) { showToast('请填写项目名称'); return; }
+  
+  if (currentEditingProject) {
+    const game = data.games.find(g => g.id === currentEditingProject);
+    game.name = name;
+    game.code = document.getElementById('proj-code').value.trim();
+    game.icon = document.getElementById('proj-icon').value;
+    game.note = document.getElementById('proj-note').value.trim();
+    if (editingProjectColor === null) {
+      delete game.color;  // 选了"自动",清除自定义色
+    } else {
+      game.color = editingProjectColor;
+    }
+    showToast('项目已更新');
+  } else {
+    const moduleNames = Array.from(document.querySelectorAll('#module-inputs .module-name-input'))
+      .map(i => i.value.trim()).filter(n => n);
+    const newGame = {
+      id: uid(),
+      name,
+      code: document.getElementById('proj-code').value.trim(),
+      icon: document.getElementById('proj-icon').value,
+      note: document.getElementById('proj-note').value.trim(),
+      modules: moduleNames.map(n => ({ id: uid(), name: n, tasks: [] })),
+      customTypes: buildDefaultCustomTypes()
+    };
+    if (editingProjectColor !== null) {
+      newGame.color = editingProjectColor;
+    }
+    data.games.push(newGame);
+    expanded[newGame.id] = true;
+    showToast('项目已创建');
+  }
+  
+  saveData();
+  closeModal('project-modal');
+  render();
+}
+
+function deleteGame(gameId) {
+  const game = data.games.find(g => g.id === gameId);
+  if (!game) return;
+  const taskCount = (game.modules || []).reduce((s, m) => s + (m.tasks?.length || 0), 0);
+  if (!confirm(`确定删除项目「${game.name}」?\n包含 ${game.modules?.length || 0} 个模块、${taskCount} 个任务。`)) return;
+  data.games = data.games.filter(g => g.id !== gameId);
+  saveData();
+  showToast('项目已删除');
+  render();
+}
+
+// ============ 模块编辑 ============
+function openModuleModal(gameId, moduleId) {
+  currentModuleContext = { gameId };
+  currentEditingModule = moduleId || null;
+  const game = data.games.find(g => g.id === gameId);
+  const mod = moduleId ? game.modules.find(m => m.id === moduleId) : null;
+  
+  document.getElementById('module-modal-title').textContent = mod ? '编辑模块' : '新建模块';
+  document.getElementById('module-game-name').innerHTML = renderIcon(game.icon, 20) + ' ' + escapeHtml(game.name);
+  document.getElementById('module-name').value = mod?.name || '';
+  document.getElementById('module-note').value = mod?.note || '';
+  document.getElementById('module-delete-btn').style.display = mod ? 'inline-block' : 'none';
+  
+  document.getElementById('module-modal').classList.add('show');
+  setTimeout(() => document.getElementById('module-name').focus(), 50);
+}
+
+function saveModule() {
+  const name = document.getElementById('module-name').value.trim();
+  if (!name) { showToast('请填写模块名称'); return; }
+  const note = document.getElementById('module-note').value.trim();
+  
+  const game = data.games.find(g => g.id === currentModuleContext.gameId);
+  
+  if (currentEditingModule) {
+    const mod = game.modules.find(m => m.id === currentEditingModule);
+    mod.name = name;
+    mod.note = note;
+    showToast('模块已更新');
+  } else {
+    const newMod = { id: uid(), name, note, tasks: [] };
+    if (!game.modules) game.modules = [];
+    game.modules.push(newMod);
+    expanded[newMod.id] = true;
+    showToast('模块已创建');
+  }
+  
+  saveData();
+  closeModal('module-modal');
+  render();
+}
+
+function deleteModule() {
+  if (!currentEditingModule) return;
+  const game = data.games.find(g => g.id === currentModuleContext.gameId);
+  const mod = game.modules.find(m => m.id === currentEditingModule);
+  if (!confirm(`确定删除模块「${mod.name}」及其下所有 ${mod.tasks?.length || 0} 个任务?`)) return;
+  game.modules = game.modules.filter(m => m.id !== currentEditingModule);
+  saveData();
+  closeModal('module-modal');
+  showToast('模块已删除');
+  render();
+}
+
+// ============ 任务编辑 ============
+function openTaskModal(taskId, gameId, moduleId) {
+  let task = null, game = null, mod = null;
+  
+  if (taskId) {
+    for (const g of data.games) {
+      for (const m of (g.modules || [])) {
+        const t = (m.tasks || []).find(t => t.id === taskId);
+        if (t) { task = t; game = g; mod = m; break; }
+      }
+      if (task) break;
+    }
+    if (!task) { showToast('找不到任务'); return; }
+    currentEditingTask = taskId;
+    currentTaskContext = { gameId: game.id, moduleId: mod.id };
+  } else {
+    game = data.games.find(g => g.id === gameId);
+    mod = game.modules.find(m => m.id === moduleId);
+    currentEditingTask = null;
+    currentTaskContext = { gameId, moduleId };
+  }
+  
+  currentTaskType = task?.type || 'kol';
+  batchMode = false;
+  editingSchedule = task?.schedule ? JSON.parse(JSON.stringify(task.schedule)) : [];
+  
+  document.getElementById('task-modal-title').textContent = task ? '编辑任务' : '新建任务';
+  document.getElementById('task-location').innerHTML = `${renderIcon(game.icon, 20)} ${escapeHtml(game.name)} / ${escapeHtml(mod.name)}`;
+  document.getElementById('task-name').value = task?.name || '';
+  document.getElementById('task-name-batch').value = '';
+  document.getElementById('task-ddl').value = task?.ddl || '';
+  
+  document.getElementById('batch-toggle-field').style.display = task ? 'none' : 'block';
+  document.getElementById('task-name-single-field').style.display = 'block';
+  document.getElementById('task-name-batch-field').style.display = 'none';
+  document.getElementById('batch-toggle-btn').textContent = '切换为批量添加';
+  
+  let defaultTrack = task?.nextTrack || '';
+  if (!task) {
+    const t = new Date();
+    t.setDate(t.getDate() + DEFAULT_TRACK_INTERVAL);
+    defaultTrack = t.toISOString().split('T')[0];
+  }
+  document.getElementById('task-track').value = defaultTrack;
+  originalTrackDate = defaultTrack;
+  
+  document.getElementById('task-note').value = task?.note || '';
+  document.getElementById('schedule-input').value = task?.scheduleRaw || '';
+  document.getElementById('track-change-reason').value = '';
+  document.getElementById('track-change-reason-field').style.display = 'none';
+  document.getElementById('track-changed-mark').style.display = 'none';
+  
+  selectedStage = task?.stage || '';
+  stageType = task?.stageType || 'gray';
+  
+  selectTaskTypeUI();
+  renderScheduleList();
+  updateTrackRuleHint();
+  
+  if (task && task.history && task.history.length > 0) {
+    document.getElementById('history-section').style.display = 'block';
+    const list = document.getElementById('history-list');
+    list.innerHTML = task.history.map(h => `
+      <div class="history-item">
+        <span class="strikethrough">${fmtDate(h.from)}</span>
+        <span class="history-arrow">→</span>
+        <strong>${fmtDate(h.to)}</strong>
+        <span style="color: var(--text-2);">· ${escapeHtml(h.reason || '未填写原因')}</span>
+        <span class="history-time">${fmtDateTime(h.when)}</span>
+      </div>
+    `).join('');
+  } else {
+    document.getElementById('history-section').style.display = 'none';
+  }
+  
+  document.getElementById('task-delete-btn').style.display = task ? 'inline-block' : 'none';
+  
+  document.getElementById('task-track').onchange = function() {
+    const newDate = this.value;
+    if (originalTrackDate && newDate !== originalTrackDate) {
+      document.getElementById('track-change-reason-field').style.display = 'block';
+      document.getElementById('track-changed-mark').style.display = 'inline';
+    } else {
+      document.getElementById('track-change-reason-field').style.display = 'none';
+      document.getElementById('track-changed-mark').style.display = 'none';
+    }
+  };
+  
+  document.getElementById('task-modal').classList.add('show');
+  setTimeout(() => document.getElementById('task-name').focus(), 50);
+}
+
+// ============ 类型与阶段辅助 ============
+
+// 获取当前项目对象(在任务编辑期间)
+function getCurrentGame() {
+  if (!currentTaskContext) return null;
+  return data.games.find(g => g.id === currentTaskContext.gameId);
+}
+
+// 解析任务类型字符串,返回对应的"类型对象"(含 label, stages, isCustom, customTypeId)
+function resolveTaskType(typeStr) {
+  if (typeStr === 'kol' || typeStr === 'artist') {
+    const baseStages = TASK_TYPES[typeStr].stages;
+    const extras = (data.customStages?.[typeStr]) || [];
+    return {
+      kind: typeStr,
+      label: TASK_TYPES[typeStr].label,
+      stages: [...baseStages, ...extras],
+      isCustom: false,
+      customTypeId: null
+    };
+  }
+  if (typeof typeStr === 'string' && typeStr.startsWith('custom:')) {
+    const customId = typeStr.slice(7);
+    const game = getCurrentGame();
+    if (!game) {
+      for (const g of data.games) {
+        const ct = g.customTypes?.find(c => c.id === customId);
+        if (ct) {
+          return { kind: 'custom', label: ct.name, stages: ct.stages || [], isCustom: true, customTypeId: customId };
+        }
+      }
+    } else {
+      const ct = game.customTypes?.find(c => c.id === customId);
+      if (ct) {
+        return { kind: 'custom', label: ct.name, stages: ct.stages || [], isCustom: true, customTypeId: customId };
+      }
+    }
+    return { kind: 'custom', label: '已删除的类型', stages: [], isCustom: true, customTypeId: customId };
+  }
+  return { kind: 'kol', label: 'KOL', stages: TASK_TYPES.kol.stages, isCustom: false, customTypeId: null };
+}
+
+// 给定一个游戏和任务type,返回对应的类型对象(用于列表渲染场景)
+function resolveTaskTypeForGame(game, typeStr) {
+  if (typeStr === 'kol' || typeStr === 'artist') {
+    return { kind: typeStr, label: TASK_TYPES[typeStr].label, isCustom: false };
+  }
+  if (typeof typeStr === 'string' && typeStr.startsWith('custom:')) {
+    const customId = typeStr.slice(7);
+    const ct = game.customTypes?.find(c => c.id === customId);
+    if (ct) return { kind: 'custom', label: ct.name, isCustom: true, customTypeId: customId };
+    return { kind: 'custom', label: '已删除', isCustom: true, customTypeId: customId };
+  }
+  return { kind: 'kol', label: 'KOL', isCustom: false };
+}
+
+function selectTaskType(type) {
+  // type 可以是 'kol' / 'artist' / 'custom' / 'custom:<id>'
+  if (type === 'custom') {
+    // 切到自定义tab:如果项目下有customType,自动选第一个;没有就提示创建
+    const game = getCurrentGame();
+    if (!game) return;
+    if (!game.customTypes) game.customTypes = buildDefaultCustomTypes();
+    if (game.customTypes.length === 0) {
+      // 没有自定义类型,展开面板让用户创建
+      currentTaskType = 'custom';  // 临时状态
+    } else {
+      currentTaskType = 'custom:' + game.customTypes[0].id;
+    }
+  } else {
+    currentTaskType = type;
+  }
+  selectedStage = '';
+  stageType = 'gray';
+  selectTaskTypeUI();
+}
+
+function selectTaskTypeUI() {
+  // 高亮顶部 tab
+  const isCustom = currentTaskType === 'custom' || (typeof currentTaskType === 'string' && currentTaskType.startsWith('custom:'));
+  document.querySelectorAll('#type-tabs .type-tab').forEach(el => {
+    const dt = el.dataset.type;
+    if (dt === 'custom') {
+      el.classList.toggle('selected', isCustom);
+    } else {
+      el.classList.toggle('selected', dt === currentTaskType);
+    }
+  });
+  
+  // 自定义面板的显示
+  document.getElementById('custom-types-panel').style.display = isCustom ? 'block' : 'none';
+  if (isCustom) renderCustomTypesPanel();
+  
+  renderStagePills();
+  updateTrackRuleHint();
+}
+
+function renderCustomTypesPanel() {
+  const game = getCurrentGame();
+  if (!game) return;
+  if (!game.customTypes) game.customTypes = buildDefaultCustomTypes();
+  
+  const pills = document.getElementById('custom-types-pills');
+  const actions = document.getElementById('custom-type-actions');
+  
+  if (game.customTypes.length === 0) {
+    pills.innerHTML = '<span style="color: var(--text-3); font-size: 12px;">本项目还没有自定义类型,在下方输入框创建一个</span>';
+    actions.style.display = 'none';
+    return;
+  }
+  
+  // 当前选中的customTypeId
+  let selectedId = null;
+  if (typeof currentTaskType === 'string' && currentTaskType.startsWith('custom:')) {
+    selectedId = currentTaskType.slice(7);
+  }
+  
+  pills.innerHTML = game.customTypes.map(ct => `
+    <span class="stage-pill ${selectedId === ct.id ? 'selected' : ''}" 
+          onclick="selectCustomType('${ct.id}')">${escapeHtml(ct.name)}</span>
+  `).join('');
+  
+  actions.style.display = selectedId ? 'block' : 'none';
+}
+
+function selectCustomType(id) {
+  currentTaskType = 'custom:' + id;
+  selectedStage = '';
+  stageType = 'gray';
+  selectTaskTypeUI();
+}
+
+function createCustomType() {
+  const game = getCurrentGame();
+  if (!game) return;
+  if (!game.customTypes) game.customTypes = [];
+  
+  const input = document.getElementById('new-custom-type-name');
+  const name = input.value.trim();
+  if (!name) {
+    showToast('请输入类型名');
+    input.focus();
+    return;
+  }
+  if (game.customTypes.find(t => t.name === name)) {
+    showToast('已有同名类型');
+    return;
+  }
+  
+  const newType = { id: uid(), name, stages: [] };
+  game.customTypes.push(newType);
+  saveData();
+  
+  currentTaskType = 'custom:' + newType.id;
+  selectedStage = '';
+  stageType = 'gray';
+  input.value = '';
+  selectTaskTypeUI();
+  showToast('已创建类型「' + name + '」');
+}
+
+function renameCustomType() {
+  const game = getCurrentGame();
+  if (!game || !currentTaskType.startsWith('custom:')) return;
+  const id = currentTaskType.slice(7);
+  const ct = game.customTypes.find(t => t.id === id);
+  if (!ct) return;
+  
+  const newName = prompt('重命名为:', ct.name);
+  if (!newName || !newName.trim()) return;
+  const trimmed = newName.trim();
+  if (game.customTypes.find(t => t.id !== id && t.name === trimmed)) {
+    showToast('已有同名类型');
+    return;
+  }
+  ct.name = trimmed;
+  saveData();
+  selectTaskTypeUI();
+  showToast('已重命名');
+}
+
+function deleteCustomType() {
+  const game = getCurrentGame();
+  if (!game || !currentTaskType.startsWith('custom:')) return;
+  const id = currentTaskType.slice(7);
+  const ct = game.customTypes.find(t => t.id === id);
+  if (!ct) return;
+  
+  // 检查这个类型是否还有任务在用
+  let usingTaskCount = 0;
+  game.modules?.forEach(m => m.tasks?.forEach(t => {
+    if (t.type === 'custom:' + id) usingTaskCount++;
+  }));
+  
+  let confirmMsg = `确定删除自定义类型「${ct.name}」?`;
+  if (usingTaskCount > 0) {
+    confirmMsg += `\n本项目有 ${usingTaskCount} 个任务在使用此类型,删除后会显示为"已删除的类型"。`;
+  }
+  if (!confirm(confirmMsg)) return;
+  
+  game.customTypes = game.customTypes.filter(t => t.id !== id);
+  saveData();
+  
+  // 切到第一个剩余的customType,没有就退回到kol
+  if (game.customTypes.length > 0) {
+    currentTaskType = 'custom:' + game.customTypes[0].id;
+  } else {
+    currentTaskType = 'custom';  // 占位状态,等用户创建新的
+  }
+  selectedStage = '';
+  stageType = 'gray';
+  selectTaskTypeUI();
+  showToast('已删除');
+}
+
+function toggleBatchMode() {
+  batchMode = !batchMode;
+  document.getElementById('task-name-single-field').style.display = batchMode ? 'none' : 'block';
+  document.getElementById('task-name-batch-field').style.display = batchMode ? 'block' : 'none';
+  document.getElementById('batch-toggle-btn').textContent = batchMode ? '切换为单个添加' : '切换为批量添加';
+  if (batchMode) setTimeout(() => document.getElementById('task-name-batch').focus(), 50);
+  else setTimeout(() => document.getElementById('task-name').focus(), 50);
+}
+
+function renderStagePills() {
+  const resolved = resolveTaskType(currentTaskType);
+  const allStages = [...(resolved.stages || [])];
+  const container = document.getElementById('stage-pills');
+  const hint = document.getElementById('stage-type-hint');
+  
+  if (hint) {
+    if (currentTaskType === 'custom') {
+      hint.textContent = '（请先在上方创建一个自定义类型）';
+    } else {
+      hint.textContent = `（${resolved.label}流程）`;
+    }
+  }
+  
+  if (currentTaskType === 'custom') {
+    container.innerHTML = '<div style="color: var(--text-3); font-size: 12px; padding: 6px 0;">请先创建或选择一个自定义类型</div>';
+    return;
+  }
+  
+  if (allStages.length === 0) {
+    container.innerHTML = '<div style="color: var(--text-3); font-size: 12px; padding: 6px 0;">此类型还没有阶段,在下方输入框输入并回车添加</div>';
+    return;
+  }
+  
+  container.innerHTML = allStages.map(s => `
+    <span class="stage-pill ${selectedStage === s.name ? 'selected' : ''}" 
+          onclick="selectStage('${escapeHtml(s.name).replace(/'/g, '&#39;')}', '${s.type}')">${escapeHtml(s.name)}</span>
+  `).join('');
+}
+
+function selectStage(name, type) {
+  selectedStage = name;
+  stageType = type;
+  renderStagePills();
+  updateTrackRuleHint();
+}
+
+function addCustomStage() {
+  const input = document.getElementById('custom-stage');
+  const name = input.value.trim();
+  if (!name) return;
+  
+  if (currentTaskType === 'kol' || currentTaskType === 'artist') {
+    if (!data.customStages[currentTaskType]) data.customStages[currentTaskType] = [];
+    const typeStages = TASK_TYPES[currentTaskType].stages;
+    const customForType = data.customStages[currentTaskType];
+    if (typeStages.find(s => s.name === name) || customForType.find(s => s.name === name)) {
+      showToast('已有同名阶段');
+      return;
+    }
+    customForType.push({ name, type: 'info' });
+  } else if (typeof currentTaskType === 'string' && currentTaskType.startsWith('custom:')) {
+    const game = getCurrentGame();
+    const id = currentTaskType.slice(7);
+    const ct = game?.customTypes?.find(t => t.id === id);
+    if (!ct) { showToast('找不到自定义类型'); return; }
+    if (!ct.stages) ct.stages = [];
+    if (ct.stages.find(s => s.name === name)) {
+      showToast('已有同名阶段');
+      return;
+    }
+    ct.stages.push({ name, type: 'info' });
+  } else {
+    showToast('请先选择任务类型');
+    return;
+  }
+  
+  saveData();
+  selectedStage = name;
+  stageType = 'info';
+  input.value = '';
+  renderStagePills();
+  updateTrackRuleHint();
+}
+
+// ============ 排期管理 ============
+function renderScheduleList() {
+  const container = document.getElementById('schedule-list');
+  
+  if (!editingSchedule || editingSchedule.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  
+  container.style.display = 'block';
+  updateMilestonePassedFlag(editingSchedule);
+  const sorted = [...editingSchedule].sort((a, b) => a.date.localeCompare(b.date));
+  const next = getNextMilestone(editingSchedule);
+  const nextId = next?.id;
+  
+  container.innerHTML = sorted.map(s => {
+    const isPassed = s.passed;
+    const isNext = s.id === nextId;
+    const dayD = dayDiff(s.date);
+    let statusText = '';
+    if (isPassed) statusText = '已过';
+    else if (isNext) {
+      if (dayD === 0) statusText = '今天';
+      else if (dayD === 1) statusText = '明天';
+      else statusText = `${dayD}天后 · 下个里程碑`;
+    } else {
+      statusText = `${dayD}天后`;
+    }
+    
+    return `
+      <div class="schedule-row ${isPassed ? 'passed' : ''} ${isNext ? 'next-up' : ''}">
+        <input type="text" value="${escapeHtml(s.name)}" 
+               onchange="updateMilestone('${s.id}', 'name', this.value)"
+               placeholder="里程碑名称">
+        <input type="date" value="${s.date}" 
+               onchange="updateMilestone('${s.id}', 'date', this.value)">
+        <button class="small ghost" onclick="removeMilestone('${s.id}')" style="padding: 4px 6px;">×</button>
+      </div>
+      <div style="font-size: 11px; padding: 0 0 4px 4px; ${isNext ? 'color: var(--warning); font-weight: 500;' : 'color: var(--text-3);'}">${statusText}</div>
+    `;
+  }).join('');
+}
+
+function updateMilestone(id, field, value) {
+  const m = editingSchedule.find(s => s.id === id);
+  if (!m) return;
+  m[field] = value;
+  renderScheduleList();
+  
+  const newTrackDate = computeTrackDateFromSchedule(editingSchedule);
+  if (newTrackDate) {
+    document.getElementById('task-track').value = newTrackDate;
+    document.getElementById('task-track').onchange();
+  }
+  updateTrackRuleHint();
+}
+
+function removeMilestone(id) {
+  editingSchedule = editingSchedule.filter(s => s.id !== id);
+  renderScheduleList();
+  updateTrackRuleHint();
+}
+
+function addManualMilestone() {
+  editingSchedule.push({ id: uid(), name: '里程碑', date: todayStr(), passed: false });
+  renderScheduleList();
+}
+
+function clearSchedule() {
+  if (editingSchedule.length === 0) return;
+  if (!confirm('确定清空所有排期?')) return;
+  editingSchedule = [];
+  document.getElementById('schedule-input').value = '';
+  renderScheduleList();
+  updateTrackRuleHint();
+}
+
+function parseSchedule() {
+  const text = document.getElementById('schedule-input').value;
+  if (!text.trim()) { showToast('请先粘贴排期文本'); return; }
+  
+  const parsed = parseScheduleText(text);
+  if (parsed.length === 0) {
+    showToast('未能识别出排期,请检查格式或手动添加');
+    return;
+  }
+  
+  if (editingSchedule.length > 0) {
+    if (!confirm(`检测到 ${parsed.length} 个里程碑,会覆盖现有的 ${editingSchedule.length} 个,确定?`)) return;
+  }
+  
+  editingSchedule = parsed;
+  renderScheduleList();
+  
+  const newTrackDate = computeTrackDateFromSchedule(editingSchedule);
+  if (newTrackDate) {
+    document.getElementById('task-track').value = newTrackDate;
+    document.getElementById('task-track').onchange();
+  }
+  updateTrackRuleHint();
+  showToast(`已识别 ${parsed.length} 个里程碑`);
+}
+
+function updateTrackRuleHint() {
+  const info = document.getElementById('track-rule-info');
+  if (!info) return;
+  
+  const scheduleInput = document.getElementById('schedule-input');
+  const rawText = scheduleInput ? scheduleInput.value.trim() : '';
+  
+  if (editingSchedule && editingSchedule.length > 0) {
+    const next = getNextMilestone(editingSchedule);
+    if (next) {
+      const diff = dayDiff(next.date);
+      info.style.display = 'block';
+      info.style.background = 'var(--accent-bg)';
+      info.style.color = 'var(--accent)';
+      info.innerHTML = `📌 已填真实排期,追踪日自动设为下个里程碑(<strong>${escapeHtml(next.name)} · ${fmtDate(next.date)}</strong>)前1天。当前为 ${diff < 0 ? '已过' : diff === 0 ? '今天到期' : diff + '天后到期'}`;
+    } else {
+      info.style.display = 'block';
+      info.style.background = 'var(--warning-bg)';
+      info.style.color = 'var(--warning)';
+      info.innerHTML = `📌 所有里程碑已过期,请确认任务是否完成`;
+    }
+  } else if (rawText) {
+    // 关键修复:已填文本但未解析
+    info.style.display = 'block';
+    info.style.background = 'var(--warning-bg)';
+    info.style.color = 'var(--warning)';
+    info.innerHTML = `⚠️ 检测到排期文本但未解析。请点击上方「📥 解析排期」按钮把文本转成结构化里程碑,追踪日才会自动联动`;
+  } else {
+    info.style.display = 'block';
+    info.style.background = 'var(--accent-bg)';
+    info.style.color = 'var(--accent)';
+    info.innerHTML = `📌 还没有真实排期,默认每 ${DEFAULT_TRACK_INTERVAL} 天追踪一次。粘贴或手填排期后,追踪日会自动按下个里程碑前1天计算`;
+  }
+}
+
+function saveTask() {
+  // 校验:类型不能是占位的'custom'(意味着用户没创建自定义类型)
+  if (currentTaskType === 'custom') {
+    showToast('请先选择或创建一个自定义类型');
+    return;
+  }
+  
+  const ddl = document.getElementById('task-ddl').value;
+  const newTrack = document.getElementById('task-track').value;
+  const note = document.getElementById('task-note').value.trim();
+  const scheduleRaw = document.getElementById('schedule-input').value;
+  
+  const game = data.games.find(g => g.id === currentTaskContext.gameId);
+  const mod = game.modules.find(m => m.id === currentTaskContext.moduleId);
+  
+  if (currentEditingTask) {
+    const name = document.getElementById('task-name').value.trim();
+    if (!name) { showToast('请填写任务名称'); return; }
+    
+    const task = mod.tasks.find(t => t.id === currentEditingTask);
+    
+    if (originalTrackDate && newTrack !== originalTrackDate && newTrack) {
+      const reason = document.getElementById('track-change-reason').value.trim();
+      if (!reason) {
+        showToast('修改追踪日期请填写调整原因');
+        document.getElementById('track-change-reason').focus();
+        return;
+      }
+      task.history = task.history || [];
+      task.history.push({
+        from: originalTrackDate,
+        to: newTrack,
+        reason: reason,
+        when: new Date().toISOString()
+      });
+    }
+    
+    task.name = name;
+    task.type = currentTaskType;
+    task.stage = selectedStage;
+    task.stageType = stageType;
+    task.ddl = ddl;
+    task.nextTrack = newTrack;
+    task.note = note;
+    task.schedule = JSON.parse(JSON.stringify(editingSchedule));
+    task.scheduleRaw = scheduleRaw;
+    showToast('任务已更新');
+  } else {
+    const taskNames = [];
+    if (batchMode) {
+      const text = document.getElementById('task-name-batch').value.trim();
+      if (!text) { showToast('请填写任务名称(每行一个)'); return; }
+      text.split('\n').forEach(l => {
+        const n = l.trim();
+        if (n) taskNames.push(n);
+      });
+      if (taskNames.length === 0) { showToast('没有有效的任务名'); return; }
+    } else {
+      const name = document.getElementById('task-name').value.trim();
+      if (!name) { showToast('请填写任务名称'); return; }
+      taskNames.push(name);
+    }
+    
+    const todayStr_ = todayStr();
+    if (!mod.tasks) mod.tasks = [];
+    taskNames.forEach(name => {
+      mod.tasks.push({
+        id: uid(),
+        name,
+        type: currentTaskType,
+        stage: selectedStage,
+        stageType: stageType,
+        ddl,
+        nextTrack: newTrack,
+        note,
+        schedule: JSON.parse(JSON.stringify(editingSchedule)),
+        scheduleRaw,
+        history: [],
+        done: false,
+        createdAt: todayStr_
+      });
+    });
+    
+    showToast(taskNames.length === 1 ? '任务已创建' : `已批量创建 ${taskNames.length} 个任务`);
+  }
+  
+  saveData();
+  closeModal('task-modal');
+  render();
+}
+
+function deleteTask() {
+  if (!currentEditingTask) return;
+  if (!confirm('确定删除这个任务?')) return;
+  
+  const game = data.games.find(g => g.id === currentTaskContext.gameId);
+  const mod = game.modules.find(m => m.id === currentTaskContext.moduleId);
+  mod.tasks = mod.tasks.filter(t => t.id !== currentEditingTask);
+  
+  saveData();
+  closeModal('task-modal');
+  showToast('任务已删除');
+  render();
+}
+
+function toggleDone(taskId) {
+  for (const g of data.games) {
+    for (const m of (g.modules || [])) {
+      const t = (m.tasks || []).find(t => t.id === taskId);
+      if (t) {
+        t.done = !t.done;
+        if (t.done) t.doneAt = new Date().toISOString();
+        saveData();
+        if (t.done) {
+          showToast('任务已完成,可在「已完成」页查看');
+        } else {
+          showToast('已取消完成,任务已回到「全部项目」');
+        }
+        render();
+        return;
+      }
+    }
+  }
+}
+
+// ============ Modal 控制 ============
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+}
+
+document.querySelectorAll('.modal-bg').forEach(m => {
+  m.addEventListener('click', e => {
+    if (e.target === m) m.classList.remove('show');
+  });
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-bg.show').forEach(m => m.classList.remove('show'));
+  }
+});
+
+// ============ 数据导入导出 ============
+function exportData() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const today = new Date().toISOString().split('T')[0];
+  a.href = url;
+  a.download = `提醒助手备份_${today}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('已导出备份文件');
+}
+
+function importData() {
+  document.getElementById('import-file').click();
+}
+
+function handleImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (!imported.games) throw new Error('数据格式不对');
+      if (!confirm(`将导入 ${imported.games.length} 个项目,会覆盖当前所有数据,确定?`)) {
+        event.target.value = '';
+        return;
+      }
+      data = imported;
+      if (!data.customStages || Array.isArray(data.customStages)) data.customStages = { kol: [], artist: [], custom: [] };
+      if (!data.notes) data.notes = '';
+      if (!data.settings) data.settings = {};
+      saveData();
+      render();
+      showToast('导入成功');
+    } catch (err) {
+      showToast('导入失败:' + err.message);
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function showHelp() {
+  document.getElementById('help-modal').classList.add('show');
+}
+
+function showModuleNote(modId) {
+  // 找到模块
+  let mod = null, game = null;
+  for (const g of data.games) {
+    const m = (g.modules || []).find(m => m.id === modId);
+    if (m) { mod = m; game = g; break; }
+  }
+  if (!mod || !mod.note) return;
+  
+  // 用现有的 alert 风格弹窗(简单版)
+  document.getElementById('mod-note-modal-title').innerHTML = `${renderIcon(game.icon, 18)} ${escapeHtml(game.name)} / ${escapeHtml(mod.name)}`;
+  document.getElementById('mod-note-modal-body').textContent = mod.note;
+  document.getElementById('mod-note-modal').classList.add('show');
+}
+
+// 初始化
+render();
+</script>
+
+</body>
+</html>
