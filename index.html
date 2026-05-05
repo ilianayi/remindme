@@ -273,9 +273,94 @@
   
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(60px); background: var(--text); color: var(--surface); padding: 10px 18px; border-radius: 8px; font-size: 13px; box-shadow: var(--shadow-lg); opacity: 0; transition: all 0.2s; z-index: 200; pointer-events: none; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  
+  /* ============ 登录界面 ============ */
+  .auth-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .auth-overlay.hidden { display: none; }
+  .auth-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 16px; padding: 36px 32px; width: 100%; max-width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.06); }
+  .auth-logo { font-size: 24px; font-weight: 600; text-align: center; margin-bottom: 6px; letter-spacing: -0.5px; }
+  .auth-subtitle { text-align: center; color: var(--text-2); font-size: 13px; margin-bottom: 28px; }
+  .auth-tabs { display: flex; gap: 0; background: var(--surface-2); border-radius: 8px; padding: 3px; margin-bottom: 20px; }
+  .auth-tab { flex: 1; text-align: center; padding: 8px 0; font-size: 13px; cursor: pointer; border-radius: 6px; transition: all 0.15s; color: var(--text-2); }
+  .auth-tab.active { background: var(--surface); color: var(--text); font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .auth-form .field { margin-bottom: 14px; }
+  .auth-form label { font-size: 12px; color: var(--text-2); display: block; margin-bottom: 5px; }
+  .auth-form input { width: 100%; padding: 10px 12px; font-size: 14px; border: 0.5px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); }
+  .auth-form input:focus { outline: none; border-color: var(--accent); }
+  .auth-submit { width: 100%; padding: 11px 0; font-size: 14px; font-weight: 500; background: var(--text); color: var(--surface); border: none; border-radius: 8px; cursor: pointer; margin-top: 6px; transition: opacity 0.15s; }
+  .auth-submit:hover { opacity: 0.85; }
+  .auth-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+  .auth-error { color: var(--danger); font-size: 12px; margin-top: 10px; min-height: 16px; }
+  .auth-divider { text-align: center; color: var(--text-3); font-size: 11px; margin: 18px 0; position: relative; }
+  .auth-divider::before, .auth-divider::after { content: ''; position: absolute; top: 50%; width: 35%; height: 0.5px; background: var(--border); }
+  .auth-divider::before { left: 0; }
+  .auth-divider::after { right: 0; }
+  .auth-google { width: 100%; padding: 10px 0; font-size: 13px; background: var(--surface); color: var(--text); border: 0.5px solid var(--border-strong); border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .auth-google:hover { background: var(--surface-2); }
+  .auth-loading { text-align: center; color: var(--text-2); font-size: 14px; padding: 100px 0; }
+  
+  /* 用户信息条(侧边栏底部) */
+  .user-bar { padding: 10px 14px; border-top: 0.5px solid var(--border); display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .user-avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+  .user-email { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+  .user-logout { font-size: 11px; color: var(--text-3); cursor: pointer; padding: 4px 8px; border-radius: 4px; }
+  .user-logout:hover { background: var(--surface-2); color: var(--danger); }
+  
+  /* 同步状态指示器 */
+  .sync-indicator { position: fixed; bottom: 16px; left: 16px; font-size: 11px; color: var(--text-3); padding: 4px 10px; background: var(--surface); border: 0.5px solid var(--border); border-radius: 12px; opacity: 0; transition: opacity 0.3s; z-index: 100; }
+  .sync-indicator.show { opacity: 1; }
+  .sync-indicator.error { color: var(--danger); border-color: var(--danger); }
 </style>
+
+<!-- Supabase JS 库 -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+
+<!-- ============ 登录界面(默认显示,登录后隐藏) ============ -->
+<div class="auth-overlay" id="auth-overlay">
+  <div class="auth-card" id="auth-card">
+    <div class="auth-logo">提醒助手</div>
+    <div class="auth-subtitle">仅限邀请用户 · 数据云端同步</div>
+    
+    <div class="auth-tabs">
+      <div class="auth-tab active" data-mode="signin" onclick="switchAuthMode('signin')">登录</div>
+      <div class="auth-tab" data-mode="signup" onclick="switchAuthMode('signup')">注册</div>
+    </div>
+    
+    <div class="auth-form">
+      <div class="field">
+        <label>邮箱</label>
+        <input type="email" id="auth-email" placeholder="you@example.com" autocomplete="email">
+      </div>
+      <div class="field">
+        <label>密码 <span style="color: var(--text-3);" id="auth-pwd-hint">(至少6位)</span></label>
+        <input type="password" id="auth-password" placeholder="" autocomplete="current-password">
+      </div>
+      <button class="auth-submit" id="auth-submit-btn" onclick="handleAuthSubmit()">登录</button>
+      <div class="auth-error" id="auth-error"></div>
+    </div>
+    
+    <div class="auth-divider">或</div>
+    <button class="auth-google" onclick="signInWithGoogle()">
+      <svg width="16" height="16" viewBox="0 0 24 24"><path fill="#4285f4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34a853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#fbbc05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#ea4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      使用 Google 登录
+    </button>
+    
+    <div style="text-align: center; margin-top: 20px; font-size: 11px; color: var(--text-3);">
+      数据将安全存储在 Supabase 云端
+    </div>
+  </div>
+  
+  <div class="auth-loading" id="auth-loading" style="display: none;">
+    <div style="font-size: 24px; margin-bottom: 12px;">⏳</div>
+    <div>正在加载你的数据...</div>
+  </div>
+</div>
+
+<!-- ============ 同步状态指示器 ============ -->
+<div class="sync-indicator" id="sync-indicator"></div>
+
 
 <div class="app">
   <aside class="sidebar">
@@ -319,11 +404,15 @@
       <div class="sidebar-action" onclick="exportData()">📤 导出数据</div>
       <div class="sidebar-action" onclick="importData()">📥 导入数据</div>
       <div class="sidebar-action" onclick="resetToDemo()">🔄 重置示例数据</div>
-      <div class="sidebar-action" onclick="restoreOldBackup()">⏪ 恢复旧版数据</div>
       <div class="sidebar-action" onclick="showHelp()">❔ 使用说明</div>
       <div style="font-size: 11px; color: var(--text-3); padding: 8px; margin-top: 8px;">
-        数据存储:浏览器本地<br>
-        建议每周导出备份
+        数据存储:云端 ☁️<br>
+        多设备自动同步
+      </div>
+      <div class="user-bar" id="user-bar" style="display: none;">
+        <div class="user-avatar" id="user-avatar">?</div>
+        <div class="user-email" id="user-email">-</div>
+        <div class="user-logout" onclick="signOut()">登出</div>
       </div>
     </div>
   </aside>
@@ -596,8 +685,8 @@ KOL-Luna"></textarea>
         · 手动改追踪日必须填原因,所有变更都有记录
       </p>
       
-      <h3 style="font-size: 14px; margin: 16px 0 6px;">数据备份 ⚠️</h3>
-      <p style="font-size: 13px; color: var(--text-2);">数据存在浏览器本地。务必每周导出JSON备份,避免清浏览器数据时丢失。</p>
+      <h3 style="font-size: 14px; margin: 16px 0 6px;">数据存储 ☁️</h3>
+      <p style="font-size: 13px; color: var(--text-2);">数据安全存储在云端,自动同步到所有设备。同一账号在公司电脑、家里电脑、手机上看到的数据完全一致。建议偶尔导出JSON备份到本地作为额外保险。</p>
     </div>
     <div class="modal-footer">
       <button class="primary" onclick="closeModal('help-modal')">知道了</button>
@@ -609,6 +698,29 @@ KOL-Luna"></textarea>
 <input type="file" id="import-file" accept=".json" style="display:none;" onchange="handleImport(event)">
 
 <script>
+// ============ Supabase 配置 ============
+const SUPABASE_URL = 'https://fhisomgmoqrjnborgmlp.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_EpFc4WcIrFieXqx0WMq8kA_cfJ1PtSS';
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// 当前登录用户 (在 onAuthStateChange 中赋值)
+let currentUser = null;
+let authMode = 'signin';  // 'signin' or 'signup'
+let saveDebounceTimer = null;  // 防抖保存定时器
+
+// 同步状态指示器
+function showSyncStatus(text, isError) {
+  const el = document.getElementById('sync-indicator');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle('error', !!isError);
+  el.classList.add('show');
+  if (!isError) {
+    clearTimeout(el._hideTimer);
+    el._hideTimer = setTimeout(() => el.classList.remove('show'), 1500);
+  }
+}
+
 const STORAGE_KEY = 'project_tracker_data_v3';
 const STORAGE_KEY_OLD_KEYS = ['project_tracker_data_v1'];
 
@@ -833,102 +945,123 @@ function getDemoData() {
   };
 }
 
-let data = loadData();
+// 默认空数据(等待登录后从云端拉取)
+let data = {
+  games: [],
+  customStages: { kol: [], artist: [], custom: [] },
+  notes: '',
+  settings: { tipShown: false }
+};
 
-function loadData() {
+// 检查是否有 localStorage 旧版数据可迁移(只在第一次登录后问)
+function checkLegacyDataForMigration() {
   try {
-    let raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      // v3 首次打开: 检查是否有 v1/v2 旧数据
-      let oldFound = null;
-      for (const oldKey of STORAGE_KEY_OLD_KEYS) {
-        const oldRaw = localStorage.getItem(oldKey);
-        if (oldRaw) { oldFound = { key: oldKey, raw: oldRaw }; break; }
-      }
-      
-      if (oldFound) {
-        // 把旧数据另存为备份 key,然后用 v3 demo 初始化
-        try {
-          localStorage.setItem('project_tracker_backup_' + oldFound.key, oldFound.raw);
-        } catch (e) {}
-        // 提示用户(延后到render之后再toast)
-        setTimeout(() => {
-          showToast('检测到旧版数据,已自动备份。当前显示新版示例,可在使用说明里恢复旧数据');
-        }, 500);
-      }
-      
-      return getDemoData();
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed.games || parsed.games.length === 0) return null;
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+}
+
+// 从云端加载该用户的数据
+async function loadDataFromCloud() {
+  if (!currentUser) return;
+  showSyncStatus('正在加载...');
+  try {
+    const { data: row, error } = await supabaseClient
+      .from('user_data')
+      .select('data')
+      .eq('user_id', currentUser.id)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') {
+      // PGRST116 = no rows,正常情况(新用户)
+      throw error;
     }
     
-    // 已有 v3 数据,正常加载
-    const loaded = JSON.parse(raw);
-    if (!loaded.games) loaded.games = [];
-    if (!loaded.customStages || Array.isArray(loaded.customStages)) loaded.customStages = { kol: [], artist: [], custom: [] };
-    if (!loaded.notes) loaded.notes = '';
-    if (!loaded.settings) loaded.settings = { tipShown: false };
-    loaded.games.forEach(g => {
-      // 老数据没有 customTypes,补上默认的
-      if (!g.customTypes || !Array.isArray(g.customTypes)) {
-        g.customTypes = buildDefaultCustomTypes();
-      }
-      g.modules?.forEach(m => {
-        delete m.type;
-        m.tasks?.forEach(t => {
-          if (!t.type) t.type = 'kol';  // 缺失就当KOL
-          // 老的 type='custom' 映射到第一个 customType
-          if (t.type === 'custom' && g.customTypes.length > 0) {
-            t.type = 'custom:' + g.customTypes[0].id;
-          }
-          if (!t.history) t.history = [];
-          if (!t.schedule) t.schedule = [];
-          if (t.scheduleRaw === undefined) t.scheduleRaw = '';
+    if (row && row.data && Object.keys(row.data).length > 0 && row.data.games) {
+      // 云端有数据,加载并做兼容修复
+      const loaded = row.data;
+      if (!loaded.games) loaded.games = [];
+      if (!loaded.customStages || Array.isArray(loaded.customStages)) loaded.customStages = { kol: [], artist: [], custom: [] };
+      if (!loaded.notes) loaded.notes = '';
+      if (!loaded.settings) loaded.settings = { tipShown: false };
+      loaded.games.forEach(g => {
+        if (!g.customTypes || !Array.isArray(g.customTypes)) {
+          g.customTypes = buildDefaultCustomTypes();
+        }
+        g.modules?.forEach(m => {
+          delete m.type;
+          m.tasks?.forEach(t => {
+            if (!t.type) t.type = 'kol';
+            if (t.type === 'custom' && g.customTypes.length > 0) {
+              t.type = 'custom:' + g.customTypes[0].id;
+            }
+            if (!t.history) t.history = [];
+            if (!t.schedule) t.schedule = [];
+            if (t.scheduleRaw === undefined) t.scheduleRaw = '';
+          });
         });
       });
-    });
-    return loaded;
-  } catch (e) {
-    console.error('加载数据失败:', e);
-    return getDefaultData();
-  }
-}
-
-// 把旧版本数据从备份中恢复(用户手动调用)
-function restoreOldBackup() {
-  for (const oldKey of STORAGE_KEY_OLD_KEYS) {
-    const backup = localStorage.getItem('project_tracker_backup_' + oldKey);
-    if (backup) {
-      try {
-        const old = JSON.parse(backup);
-        if (!confirm(`确定恢复来自旧版本(${oldKey})的数据吗?当前的所有数据会被覆盖!`)) return;
-        const migrated = migrateOldData(old);
-        data = migrated;
-        saveData();
-        render();
-        showToast('已恢复旧版数据');
-        return;
-      } catch (e) {
-        showToast('恢复失败:' + e.message);
-        return;
+      data = loaded;
+      showSyncStatus('已加载 ☁️');
+    } else {
+      // 云端没数据(新用户): 检查是否有 localStorage 旧数据可迁移
+      const legacy = checkLegacyDataForMigration();
+      if (legacy) {
+        const useIt = confirm('检测到你的浏览器里有旧的本地数据。\n\n是否将其导入到云端账号?\n\n点"确定"导入,点"取消"使用空数据(旧数据会保留在浏览器localStorage里,不会丢失)');
+        if (useIt) {
+          data = migrateOldData(legacy);
+          await saveDataToCloud();
+          showSyncStatus('迁移完成 ☁️');
+        } else {
+          data = getDefaultData();
+          await saveDataToCloud();
+        }
+      } else {
+        // 全新用户,用空数据(不是 demo,避免多人时混乱)
+        data = getDefaultData();
+        await saveDataToCloud();
       }
     }
+  } catch (e) {
+    console.error('从云端加载失败:', e);
+    showSyncStatus('加载失败', true);
+    showToast('从云端加载失败:' + (e.message || '未知错误') + ',请刷新重试');
   }
-  showToast('没有找到旧版数据备份');
 }
 
-// 重置为初始示例数据
-function resetToDemo() {
-  if (!confirm('确定重置为初始示例数据吗?当前的所有数据会被永久删除(建议先导出备份)!')) return;
-  data = getDemoData();
-  saveData();
-  render();
-  showToast('已重置为初始示例数据');
+// 把当前内存中的 data 推送到云端
+async function saveDataToCloud() {
+  if (!currentUser) return;
+  showSyncStatus('保存中...');
+  try {
+    const { error } = await supabaseClient
+      .from('user_data')
+      .upsert({
+        user_id: currentUser.id,
+        data: data,
+        display_name: currentUser.email,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+    if (error) throw error;
+    showSyncStatus('已保存 ☁️');
+  } catch (e) {
+    console.error('保存到云端失败:', e);
+    showSyncStatus('保存失败', true);
+    showToast('保存到云端失败:' + (e.message || '未知错误'));
+  }
 }
 
+// 旧版本数据迁移(把 v1/v2/v3 localStorage 格式转为云端格式)
 function migrateOldData(old) {
   const migrated = {
     games: old.games || [],
-    customStages: { kol: [], artist: [], custom: [] },
-    notes: '',
+    customStages: old.customStages || { kol: [], artist: [], custom: [] },
+    notes: old.notes || '',
     settings: old.settings || { tipShown: false }
   };
   migrated.games.forEach(g => {
@@ -936,6 +1069,7 @@ function migrateOldData(old) {
     g.modules?.forEach(m => {
       const inheritedType = m.type;
       delete m.type;
+      if (!m.note) m.note = '';
       m.tasks?.forEach(t => {
         if (!t.type) t.type = inheritedType || 'kol';
         if (t.type === 'custom' && g.customTypes.length > 0) {
@@ -950,12 +1084,26 @@ function migrateOldData(old) {
   return migrated;
 }
 
+// 重置为空数据
+function resetToDemo() {
+  if (!confirm('确定重置为示例数据吗?当前的所有云端数据会被覆盖(建议先导出备份)!')) return;
+  data = getDemoData();
+  saveData();
+  render();
+  showToast('已重置为示例数据');
+}
+
+// saveData: 同步接口,内部异步推送到云端(防抖,避免连续操作产生大量请求)
 function saveData() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (e) {
-    showToast('保存失败:' + e.message);
+  if (!currentUser) {
+    // 还没登录(理论上不应到这,因为登录前主界面藏着)
+    console.warn('saveData called before login');
+    return;
   }
+  clearTimeout(saveDebounceTimer);
+  saveDebounceTimer = setTimeout(() => {
+    saveDataToCloud();
+  }, 600);
 }
 
 function uid() { return 'id_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8); }
@@ -2039,9 +2187,7 @@ function renderEmail() {
       <div class="placeholder-icon">📧</div>
       <div class="placeholder-title">功能开发中</div>
       <div class="placeholder-text">
-        这个页面将自动抓取你Gmail里打了指定标签的邮件,用AI做摘要和分类,帮你快速识别哪些是今天要处理的事情。<br><br>
-        实现这个功能需要部署到云端(Vercel + Supabase),会在第三阶段开发。<br><br>
-        <span style="color: var(--text-3); font-size: 12px;">当前阶段:第一阶段(本地版)</span>
+        这个页面将自动抓取你Gmail里打了指定标签的邮件,用AI做摘要和分类,帮你快速识别哪些是今天要处理的事情。
       </div>
     </div>
   `;
@@ -2976,8 +3122,173 @@ function showModuleNote(modId) {
   document.getElementById('mod-note-modal').classList.add('show');
 }
 
-// 初始化
-render();
+// ============ 认证初始化和事件处理 ============
+
+// 切换登录/注册模式
+function switchAuthMode(mode) {
+  authMode = mode;
+  document.querySelectorAll('.auth-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.mode === mode);
+  });
+  document.getElementById('auth-submit-btn').textContent = mode === 'signin' ? '登录' : '注册';
+  document.getElementById('auth-pwd-hint').textContent = mode === 'signup' ? '(至少6位)' : '';
+  document.getElementById('auth-error').textContent = '';
+  document.getElementById('auth-password').setAttribute('autocomplete', mode === 'signin' ? 'current-password' : 'new-password');
+}
+
+// 处理邮箱密码登录/注册
+async function handleAuthSubmit() {
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const errorEl = document.getElementById('auth-error');
+  const submitBtn = document.getElementById('auth-submit-btn');
+  
+  errorEl.textContent = '';
+  
+  if (!email || !email.includes('@')) {
+    errorEl.textContent = '请输入有效的邮箱';
+    return;
+  }
+  if (!password || password.length < 6) {
+    errorEl.textContent = '密码至少6位';
+    return;
+  }
+  
+  submitBtn.disabled = true;
+  submitBtn.textContent = '...';
+  
+  try {
+    if (authMode === 'signup') {
+      const { data: result, error } = await supabaseClient.auth.signUp({ email, password });
+      if (error) throw error;
+      if (result.user && !result.session) {
+        // 需要邮箱验证(理论上你已关闭,以防万一)
+        errorEl.textContent = '请检查邮箱中的验证邮件';
+      }
+      // 成功的情况会触发 onAuthStateChange 自动登录
+    } else {
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+    }
+  } catch (e) {
+    errorEl.textContent = translateAuthError(e.message);
+    submitBtn.disabled = false;
+    submitBtn.textContent = authMode === 'signin' ? '登录' : '注册';
+  }
+}
+
+// Google 登录
+async function signInWithGoogle() {
+  try {
+    const { error } = await supabaseClient.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.href }
+    });
+    if (error) throw error;
+  } catch (e) {
+    document.getElementById('auth-error').textContent = translateAuthError(e.message);
+  }
+}
+
+// 登出
+async function signOut() {
+  if (!confirm('确定登出?')) return;
+  try {
+    await supabaseClient.auth.signOut();
+    window.location.reload();
+  } catch (e) {
+    showToast('登出失败:' + e.message);
+  }
+}
+
+// 错误信息中英文转换
+function translateAuthError(msg) {
+  // 优先匹配白名单错误
+  if (msg && (msg.includes('EMAIL_NOT_ALLOWED') || msg.includes('未被邀请') || msg.includes('Database error saving new user'))) {
+    return '该邮箱未被邀请使用此应用,请联系管理员获取访问权限';
+  }
+  const translations = {
+    'Invalid login credentials': '邮箱或密码不正确',
+    'Email not confirmed': '邮箱尚未验证',
+    'User already registered': '该邮箱已注册,请直接登录',
+    'Password should be at least 6 characters': '密码至少6位',
+    'Email rate limit exceeded': '请求过于频繁,稍后重试',
+    'Invalid email': '邮箱格式不正确',
+    'Email signups are disabled': '注册已关闭,请联系管理员',
+  };
+  for (const en in translations) {
+    if (msg && msg.includes(en)) return translations[en];
+  }
+  return msg || '出现错误,请重试';
+}
+
+// 显示登录界面
+function showAuthOverlay() {
+  document.getElementById('auth-overlay').classList.remove('hidden');
+  document.getElementById('auth-card').style.display = 'block';
+  document.getElementById('auth-loading').style.display = 'none';
+  document.getElementById('user-bar').style.display = 'none';
+}
+
+// 隐藏登录界面,显示主应用
+function hideAuthOverlay() {
+  document.getElementById('auth-overlay').classList.add('hidden');
+}
+
+// 显示登录后的加载中状态
+function showAuthLoading() {
+  document.getElementById('auth-card').style.display = 'none';
+  document.getElementById('auth-loading').style.display = 'block';
+}
+
+// 监听登录状态变化
+supabaseClient.auth.onAuthStateChange(async (event, session) => {
+  if (session && session.user) {
+    // 已登录(无论是 INITIAL_SESSION/SIGNED_IN/TOKEN_REFRESHED 都走这条)
+    if (currentUser && currentUser.id === session.user.id) {
+      // 已经是当前用户(可能是 token 刷新),什么都不做
+      return;
+    }
+    currentUser = session.user;
+    
+    // 显示加载中
+    showAuthLoading();
+    
+    // 从云端拉取数据
+    await loadDataFromCloud();
+    
+    // 显示用户信息
+    const userBar = document.getElementById('user-bar');
+    userBar.style.display = 'flex';
+    document.getElementById('user-avatar').textContent = (currentUser.email || '?')[0].toUpperCase();
+    document.getElementById('user-email').textContent = currentUser.email || '已登录';
+    
+    // 隐藏登录界面,渲染主应用
+    hideAuthOverlay();
+    render();
+  } else {
+    // 未登录或已登出
+    currentUser = null;
+    showAuthOverlay();
+  }
+});
+
+// 检查初始会话
+(async () => {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session) {
+    showAuthOverlay();
+  }
+  // 如果有 session,onAuthStateChange 的 INITIAL_SESSION 事件会自动处理
+})();
+
+// 让回车键也能提交登录表单
+document.getElementById('auth-password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') handleAuthSubmit();
+});
+document.getElementById('auth-email').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('auth-password').focus();
+});
 </script>
 
 </body>
