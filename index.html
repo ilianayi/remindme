@@ -403,12 +403,11 @@
     <div class="sidebar-bottom">
       <div class="sidebar-action" onclick="exportData()">📤 导出数据</div>
       <div class="sidebar-action" onclick="importData()">📥 导入数据</div>
-      <div class="sidebar-action" onclick="migrateLegacyToCloud()">⏪ 导入本地旧数据</div>
       <div class="sidebar-action" onclick="resetToDemo()">🔄 重置示例数据</div>
       <div class="sidebar-action" onclick="showHelp()">❔ 使用说明</div>
       <div style="font-size: 11px; color: var(--text-3); padding: 8px; margin-top: 8px;">
-        数据存储:云端 ☁️<br>
-        多设备自动同步
+        本地存储 + 云端同步<br>
+        无网络也可使用
       </div>
       <div class="user-bar" id="user-bar" style="display: none;">
         <div class="user-avatar" id="user-avatar">?</div>
@@ -946,146 +945,57 @@ function getDemoData() {
   };
 }
 
-// 默认空数据(等待登录后从云端拉取)
+// 默认空数据(等待登录后从云端拉取或合并)
 let data = {
   games: [],
   customStages: { kol: [], artist: [], custom: [] },
   notes: '',
   settings: { tipShown: false }
 };
+let dataLastSavedAt = null;  // 本地数据最后保存时间(用于和云端时间戳对比)
+let cloudSyncEnabled = false;  // 是否允许云端同步(登录后为true)
+let pendingSyncRetryTimer = null;
 
-// 检查是否有 localStorage 旧版数据可迁移(只在第一次登录后问)
-function checkLegacyDataForMigration() {
+// 检查是否有 localStorage 数据可用
+function loadLocalData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed.games || parsed.games.length === 0) return null;
+    if (!parsed.games) return null;
     return parsed;
   } catch (e) {
     return null;
   }
 }
 
-// 从云端加载该用户的数据
-async function loadDataFromCloud() {
-  if (!currentUser) return;
-  showSyncStatus('正在加载...');
+// 保存到 localStorage(同步,瞬时)
+function saveToLocalStorage() {
   try {
-    const { data: row, error } = await supabaseClient
-      .from('user_data')
-      .select('data')
-      .eq('user_id', currentUser.id)
-      .single();
-    
-    if (error && error.code !== 'PGRST116') {
-      // PGRST116 = no rows,正常情况(新用户)
-      throw error;
-    }
-    
-    if (row && row.data && Object.keys(row.data).length > 0 && row.data.games) {
-      // 云端有数据,加载并做兼容修复
-      const loaded = row.data;
-      if (!loaded.games) loaded.games = [];
-      if (!loaded.customStages || Array.isArray(loaded.customStages)) loaded.customStages = { kol: [], artist: [], custom: [] };
-      if (!loaded.notes) loaded.notes = '';
-      if (!loaded.settings) loaded.settings = { tipShown: false };
-      loaded.games.forEach(g => {
-        if (!g.customTypes || !Array.isArray(g.customTypes)) {
-          g.customTypes = buildDefaultCustomTypes();
-        }
-        g.modules?.forEach(m => {
-          delete m.type;
-          m.tasks?.forEach(t => {
-            if (!t.type) t.type = 'kol';
-            if (t.type === 'custom' && g.customTypes.length > 0) {
-              t.type = 'custom:' + g.customTypes[0].id;
-            }
-            if (!t.history) t.history = [];
-            if (!t.schedule) t.schedule = [];
-            if (t.scheduleRaw === undefined) t.scheduleRaw = '';
-          });
-        });
-      });
-      data = loaded;
-      showSyncStatus('已加载 ☁️');
-    } else {
-      // 云端没数据(新用户),直接用空数据进主界面
-      data = getDefaultData();
-      await saveDataToCloud();
-      
-      // 检查是否有 localStorage 旧数据,如果有,延迟 800ms 后用 showToast 提示用户去侧边栏点迁移按钮
-      // (不用 confirm 因为浏览器在自动登录跳转后会拦截 confirm 弹窗)
-      const legacy = checkLegacyDataForMigration();
-      if (legacy) {
-        setTimeout(() => {
-          showToast('检测到浏览器本地有旧数据,可在左下角"导入本地旧数据"迁移');
-        }, 800);
-      }
-    }
+    const toSave = {...data, _lastSavedAt: new Date().toISOString()};
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+    dataLastSavedAt = toSave._lastSavedAt;
   } catch (e) {
-    console.error('从云端加载失败:', e);
-    showSyncStatus('加载失败', true);
-    showToast('从云端加载失败:' + (e.message || '未知错误') + ',请刷新重试');
+    console.error('localStorage 保存失败:', e);
+    showToast('本地保存失败:' + e.message);
   }
 }
 
-// 用户主动点击侧边栏按钮触发迁移
-function migrateLegacyToCloud() {
-  const legacy = checkLegacyDataForMigration();
-  if (!legacy) {
-    showToast('浏览器本地没有旧数据');
-    return;
-  }
-  
-  // 这时候可以用 confirm 因为是用户主动点击触发
-  const confirmMsg = `检测到浏览器本地有 ${legacy.games.length} 个项目的旧数据。\n\n确定导入到云端账号? 当前云端的数据会被覆盖!(建议先导出云端数据备份)`;
-  if (!confirm(confirmMsg)) return;
-  
-  data = migrateOldData(legacy);
-  saveData();
-  render();
-  showToast('已导入本地旧数据到云端');
-}
-
-// 把当前内存中的 data 推送到云端
-async function saveDataToCloud() {
-  if (!currentUser) return;
-  showSyncStatus('保存中...');
-  try {
-    const { error } = await supabaseClient
-      .from('user_data')
-      .upsert({
-        user_id: currentUser.id,
-        data: data,
-        display_name: currentUser.email,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' });
-    if (error) throw error;
-    showSyncStatus('已保存 ☁️');
-  } catch (e) {
-    console.error('保存到云端失败:', e);
-    showSyncStatus('保存失败', true);
-    showToast('保存到云端失败:' + (e.message || '未知错误'));
-  }
-}
-
-// 旧版本数据迁移(把 v1/v2/v3 localStorage 格式转为云端格式)
-function migrateOldData(old) {
-  const migrated = {
-    games: old.games || [],
-    customStages: old.customStages || { kol: [], artist: [], custom: [] },
-    notes: old.notes || '',
-    settings: old.settings || { tipShown: false }
-  };
-  migrated.games.forEach(g => {
-    if (!g.customTypes) g.customTypes = buildDefaultCustomTypes();
+// 数据兼容性修复(从老格式补齐字段)
+function fixDataShape(loaded) {
+  if (!loaded.games) loaded.games = [];
+  if (!loaded.customStages || Array.isArray(loaded.customStages)) loaded.customStages = { kol: [], artist: [], custom: [] };
+  if (!loaded.notes) loaded.notes = '';
+  if (!loaded.settings) loaded.settings = { tipShown: false };
+  loaded.games.forEach(g => {
+    if (!g.customTypes || !Array.isArray(g.customTypes)) {
+      g.customTypes = buildDefaultCustomTypes();
+    }
     g.modules?.forEach(m => {
-      const inheritedType = m.type;
       delete m.type;
       if (!m.note) m.note = '';
       m.tasks?.forEach(t => {
-        if (!t.type) t.type = inheritedType || 'kol';
+        if (!t.type) t.type = 'kol';
         if (t.type === 'custom' && g.customTypes.length > 0) {
           t.type = 'custom:' + g.customTypes[0].id;
         }
@@ -1095,29 +1005,123 @@ function migrateOldData(old) {
       });
     });
   });
-  return migrated;
+  return loaded;
 }
 
-// 重置为空数据
+// 从云端拉取数据(后台异步,失败不影响本地)
+// 拉取后会和本地数据按时间戳比较,新的覆盖旧的
+async function syncFromCloud() {
+  if (!currentUser || !cloudSyncEnabled) return;
+  showSyncStatus('云端同步中...');
+  try {
+    const { data: row, error } = await supabaseClient
+      .from('user_data')
+      .select('data, updated_at')
+      .eq('user_id', currentUser.id)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    
+    if (!row || !row.data || !row.data.games) {
+      // 云端没数据,把本地推上去
+      if (data.games && data.games.length > 0) {
+        await pushToCloud();
+        showSyncStatus('已上传 ☁️');
+      } else {
+        showSyncStatus('云端就绪 ☁️');
+      }
+      return;
+    }
+    
+    // 云端有数据,比较时间戳决定用谁
+    const cloudData = fixDataShape(row.data);
+    const cloudTime = row.data._lastSavedAt || row.updated_at;
+    const localTime = dataLastSavedAt;
+    
+    if (!localTime || (cloudTime && cloudTime > localTime)) {
+      // 云端新,采用云端
+      data = cloudData;
+      saveToLocalStorage();  // 把云端数据也写到本地
+      render();
+      showSyncStatus('已从云端更新 ☁️');
+    } else if (localTime > cloudTime) {
+      // 本地新,推到云端
+      await pushToCloud();
+      showSyncStatus('已上传更新 ☁️');
+    } else {
+      showSyncStatus('数据已同步 ☁️');
+    }
+  } catch (e) {
+    console.warn('云端同步失败(应用继续工作):', e);
+    showSyncStatus('云端同步失败,稍后重试', true);
+    // 5 秒后再试
+    clearTimeout(pendingSyncRetryTimer);
+    pendingSyncRetryTimer = setTimeout(() => syncFromCloud(), 5000);
+  }
+}
+
+// 把本地 data 推到云端(后台,失败不影响本地)
+async function pushToCloud() {
+  if (!currentUser || !cloudSyncEnabled) return;
+  try {
+    const dataToSend = {...data, _lastSavedAt: dataLastSavedAt || new Date().toISOString()};
+    const { error } = await supabaseClient
+      .from('user_data')
+      .upsert({
+        user_id: currentUser.id,
+        data: dataToSend,
+        display_name: currentUser.email,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+    if (error) throw error;
+  } catch (e) {
+    console.warn('推送云端失败(本地数据已保存):', e);
+    showSyncStatus('云端保存失败', true);
+    // 标记"待同步",5 秒后重试
+    clearTimeout(pendingSyncRetryTimer);
+    pendingSyncRetryTimer = setTimeout(() => pushToCloud(), 5000);
+    throw e;
+  }
+}
+
+// 旧版本数据迁移
+function migrateOldData(old) {
+  const migrated = {
+    games: old.games || [],
+    customStages: old.customStages || { kol: [], artist: [], custom: [] },
+    notes: old.notes || '',
+    settings: old.settings || { tipShown: false }
+  };
+  return fixDataShape(migrated);
+}
+
+// 重置为示例数据
 function resetToDemo() {
-  if (!confirm('确定重置为示例数据吗?当前的所有云端数据会被覆盖(建议先导出备份)!')) return;
+  if (!confirm('确定重置为示例数据吗?当前的所有数据(包括云端)会被覆盖!')) return;
   data = getDemoData();
   saveData();
   render();
   showToast('已重置为示例数据');
 }
 
-// saveData: 同步接口,内部异步推送到云端(防抖,避免连续操作产生大量请求)
+// saveData: 核心保存接口
+// 同步写本地(瞬时),异步推云端(失败不影响)
 function saveData() {
-  if (!currentUser) {
-    // 还没登录(理论上不应到这,因为登录前主界面藏着)
-    console.warn('saveData called before login');
-    return;
-  }
+  saveToLocalStorage();  // 立即写本地
+  
+  // 防抖:600ms 内多次保存合并为一次云端推送
   clearTimeout(saveDebounceTimer);
-  saveDebounceTimer = setTimeout(() => {
-    saveDataToCloud();
-  }, 600);
+  if (cloudSyncEnabled && currentUser) {
+    saveDebounceTimer = setTimeout(() => {
+      pushToCloud().catch(() => {});  // 失败不影响主流程
+    }, 600);
+  }
+}
+
+// 用户主动点击侧边栏按钮触发本地数据迁移
+function migrateLegacyToCloud() {
+  // 这版本本地数据本来就在用,实际是"导入备份的JSON文件"
+  importData();
 }
 
 function uid() { return 'id_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8); }
@@ -3255,46 +3259,75 @@ function showAuthLoading() {
   document.getElementById('auth-loading').style.display = 'block';
 }
 
-// 监听登录状态变化
-supabaseClient.auth.onAuthStateChange(async (event, session) => {
+// 启动主流程:本地优先,云端后台异步
+(async () => {
+  // 1. 立即从 localStorage 加载数据
+  const localData = loadLocalData();
+  if (localData) {
+    data = fixDataShape(localData);
+    dataLastSavedAt = localData._lastSavedAt;
+  }
+  
+  // 2. 检查是否已经登录(用cached session,不发请求)
+  let session = null;
+  try {
+    const result = await Promise.race([
+      supabaseClient.auth.getSession(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+    ]);
+    session = result?.data?.session;
+  } catch (e) {
+    console.warn('getSession 超时或失败,继续作为离线模式:', e);
+  }
+  
   if (session && session.user) {
-    // 已登录(无论是 INITIAL_SESSION/SIGNED_IN/TOKEN_REFRESHED 都走这条)
-    if (currentUser && currentUser.id === session.user.id) {
-      // 已经是当前用户(可能是 token 刷新),什么都不做
-      return;
-    }
+    // 已登录:立即进主界面,云端后台同步
     currentUser = session.user;
+    cloudSyncEnabled = true;
     
-    // 显示加载中
-    showAuthLoading();
-    
-    // 从云端拉取数据
-    await loadDataFromCloud();
-    
-    // 显示用户信息
-    const userBar = document.getElementById('user-bar');
-    userBar.style.display = 'flex';
+    // 立即显示主界面(不等云端)
+    document.getElementById('user-bar').style.display = 'flex';
     document.getElementById('user-avatar').textContent = (currentUser.email || '?')[0].toUpperCase();
     document.getElementById('user-email').textContent = currentUser.email || '已登录';
-    
-    // 隐藏登录界面,渲染主应用
     hideAuthOverlay();
     render();
+    
+    // 后台尝试同步云端数据(失败也不影响)
+    setTimeout(() => {
+      syncFromCloud().catch(() => {});
+    }, 500);
   } else {
-    // 未登录或已登出
-    currentUser = null;
+    // 未登录:显示登录界面
     showAuthOverlay();
+    // 但仍然让 localStorage 数据呆在内存中,登录成功后能合并
   }
-});
-
-// 检查初始会话
-(async () => {
-  const { data: { session } } = await supabaseClient.auth.getSession();
-  if (!session) {
-    showAuthOverlay();
-  }
-  // 如果有 session,onAuthStateChange 的 INITIAL_SESSION 事件会自动处理
 })();
+
+// 监听登录状态变化(handle 登录/登出/token刷新)
+supabaseClient.auth.onAuthStateChange(async (event, session) => {
+  if (event === 'SIGNED_IN' && session && session.user) {
+    if (currentUser && currentUser.id === session.user.id) return;  // 重复事件
+    
+    currentUser = session.user;
+    cloudSyncEnabled = true;
+    
+    document.getElementById('user-bar').style.display = 'flex';
+    document.getElementById('user-avatar').textContent = (currentUser.email || '?')[0].toUpperCase();
+    document.getElementById('user-email').textContent = currentUser.email || '已登录';
+    hideAuthOverlay();
+    render();
+    
+    // 后台同步云端数据
+    setTimeout(() => {
+      syncFromCloud().catch(() => {});
+    }, 500);
+  } else if (event === 'SIGNED_OUT') {
+    currentUser = null;
+    cloudSyncEnabled = false;
+    showAuthOverlay();
+  }
+  // 其他事件 (TOKEN_REFRESHED, INITIAL_SESSION) 不做任何事
+});
 
 // 让回车键也能提交登录表单
 document.getElementById('auth-password').addEventListener('keydown', e => {
