@@ -1190,11 +1190,13 @@ function parseScheduleText(text) {
     let m;
     
     // 1. YYYYMMDD 连续8位(必须最先匹配,前后不能是数字)
-    m = line.match(/(?<!\d)(\d{4})(\d{2})(\d{2})(?!\d)/);
+    m = line.match(/(\d{4})(\d{2})(\d{2})(?!\d)/);
     if (m) {
+      const prevChar = m.index > 0 ? line[m.index - 1] : '';
+      const isPrevDigit = /\d/.test(prevChar);
       const y = parseInt(m[1]), mo = parseInt(m[2]), d = parseInt(m[3]);
-      // 合理性校验:年份在1990-2099,月份1-12,日1-31
-      if (y >= 1990 && y <= 2099 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      const valid = y >= 1990 && y <= 2099 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31;
+      if (!isPrevDigit && valid) {
         year = y; month = mo; day = d;
         dateMatchStart = m.index;
         dateMatchEnd = m.index + m[0].length;
@@ -1226,34 +1228,46 @@ function parseScheduleText(text) {
     
     // 4. MM.DD (前后不能是数字或点,避免和2026.04.17冲突)
     if (!month) {
-      m = line.match(/(?<![\d\.])(\d{1,2})\.(\d{1,2})(?![\d\.])/);
+      m = line.match(/(\d{1,2})\.(\d{1,2})(?![\d\.])/);
       if (m) {
-        month = parseInt(m[1]);
-        day = parseInt(m[2]);
-        dateMatchStart = m.index;
-        dateMatchEnd = m.index + m[0].length;
+        const prevChar = m.index > 0 ? line[m.index - 1] : '';
+        const isPrevBad = /[\d\.]/.test(prevChar);
+        if (!isPrevBad) {
+          month = parseInt(m[1]);
+          day = parseInt(m[2]);
+          dateMatchStart = m.index;
+          dateMatchEnd = m.index + m[0].length;
+        }
       }
     }
     
     // 5. MM-DD (前后不能是数字或短横线)
     if (!month) {
-      m = line.match(/(?<![\d\-])(\d{1,2})-(\d{1,2})(?![\d\-])/);
+      m = line.match(/(\d{1,2})-(\d{1,2})(?![\d\-])/);
       if (m) {
-        month = parseInt(m[1]);
-        day = parseInt(m[2]);
-        dateMatchStart = m.index;
-        dateMatchEnd = m.index + m[0].length;
+        const prevChar = m.index > 0 ? line[m.index - 1] : '';
+        const isPrevBad = /[\d\-]/.test(prevChar);
+        if (!isPrevBad) {
+          month = parseInt(m[1]);
+          day = parseInt(m[2]);
+          dateMatchStart = m.index;
+          dateMatchEnd = m.index + m[0].length;
+        }
       }
     }
     
     // 6. MM/DD (前后不能是数字或斜杠)
     if (!month) {
-      m = line.match(/(?<![\d\/])(\d{1,2})\/(\d{1,2})(?![\d\/])/);
+      m = line.match(/(\d{1,2})\/(\d{1,2})(?![\d\/])/);
       if (m) {
-        month = parseInt(m[1]);
-        day = parseInt(m[2]);
-        dateMatchStart = m.index;
-        dateMatchEnd = m.index + m[0].length;
+        const prevChar = m.index > 0 ? line[m.index - 1] : '';
+        const isPrevBad = /[\d\/]/.test(prevChar);
+        if (!isPrevBad) {
+          month = parseInt(m[1]);
+          day = parseInt(m[2]);
+          dateMatchStart = m.index;
+          dateMatchEnd = m.index + m[0].length;
+        }
       }
     }
     
