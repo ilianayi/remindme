@@ -403,6 +403,7 @@
     <div class="sidebar-bottom">
       <div class="sidebar-action" onclick="exportData()">📤 导出数据</div>
       <div class="sidebar-action" onclick="importData()">📥 导入数据</div>
+      <div class="sidebar-action" onclick="migrateLegacyToCloud()">⏪ 导入本地旧数据</div>
       <div class="sidebar-action" onclick="resetToDemo()">🔄 重置示例数据</div>
       <div class="sidebar-action" onclick="showHelp()">❔ 使用说明</div>
       <div style="font-size: 11px; color: var(--text-3); padding: 8px; margin-top: 8px;">
@@ -1009,22 +1010,17 @@ async function loadDataFromCloud() {
       data = loaded;
       showSyncStatus('已加载 ☁️');
     } else {
-      // 云端没数据(新用户): 检查是否有 localStorage 旧数据可迁移
+      // 云端没数据(新用户),直接用空数据进主界面
+      data = getDefaultData();
+      await saveDataToCloud();
+      
+      // 检查是否有 localStorage 旧数据,如果有,延迟 800ms 后用 showToast 提示用户去侧边栏点迁移按钮
+      // (不用 confirm 因为浏览器在自动登录跳转后会拦截 confirm 弹窗)
       const legacy = checkLegacyDataForMigration();
       if (legacy) {
-        const useIt = confirm('检测到你的浏览器里有旧的本地数据。\n\n是否将其导入到云端账号?\n\n点"确定"导入,点"取消"使用空数据(旧数据会保留在浏览器localStorage里,不会丢失)');
-        if (useIt) {
-          data = migrateOldData(legacy);
-          await saveDataToCloud();
-          showSyncStatus('迁移完成 ☁️');
-        } else {
-          data = getDefaultData();
-          await saveDataToCloud();
-        }
-      } else {
-        // 全新用户,用空数据(不是 demo,避免多人时混乱)
-        data = getDefaultData();
-        await saveDataToCloud();
+        setTimeout(() => {
+          showToast('检测到浏览器本地有旧数据,可在左下角"导入本地旧数据"迁移');
+        }, 800);
       }
     }
   } catch (e) {
@@ -1032,6 +1028,24 @@ async function loadDataFromCloud() {
     showSyncStatus('加载失败', true);
     showToast('从云端加载失败:' + (e.message || '未知错误') + ',请刷新重试');
   }
+}
+
+// 用户主动点击侧边栏按钮触发迁移
+function migrateLegacyToCloud() {
+  const legacy = checkLegacyDataForMigration();
+  if (!legacy) {
+    showToast('浏览器本地没有旧数据');
+    return;
+  }
+  
+  // 这时候可以用 confirm 因为是用户主动点击触发
+  const confirmMsg = `检测到浏览器本地有 ${legacy.games.length} 个项目的旧数据。\n\n确定导入到云端账号? 当前云端的数据会被覆盖!(建议先导出云端数据备份)`;
+  if (!confirm(confirmMsg)) return;
+  
+  data = migrateOldData(legacy);
+  saveData();
+  render();
+  showToast('已导入本地旧数据到云端');
 }
 
 // 把当前内存中的 data 推送到云端
