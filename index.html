@@ -493,7 +493,7 @@
       <div class="field">
         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500;">
           <input type="checkbox" id="proj-shared" style="width: 16px; height: 16px; cursor: pointer;">
-          <span>🔓 共享给团队 <span style="color: var(--text-3); font-weight: 400; font-size: 12px;">（其他成员可查看此项目下所有内容,但无法编辑）</span></span>
+          <span>👥 共享给团队 <span style="color: var(--text-3); font-weight: 400; font-size: 12px;">（其他成员可查看此项目下所有内容,但无法编辑）</span></span>
         </label>
       </div>
     </div>
@@ -526,7 +526,7 @@
       <div class="field">
         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500;">
           <input type="checkbox" id="module-shared" style="width: 16px; height: 16px; cursor: pointer;">
-          <span>🔓 共享给团队 <span style="color: var(--text-3); font-weight: 400; font-size: 12px;">（其他成员可查看此模块下的所有任务,无法编辑）</span></span>
+          <span>👥 共享给团队 <span style="color: var(--text-3); font-weight: 400; font-size: 12px;">（其他成员可查看此模块下的所有任务,无法编辑）</span></span>
         </label>
       </div>
     </div>
@@ -628,6 +628,13 @@ KOL-Luna"></textarea>
       <div class="field">
         <label>备注</label>
         <textarea id="task-note" placeholder="进度详情、沟通记录等"></textarea>
+      </div>
+      
+      <div class="field">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500;">
+          <input type="checkbox" id="task-shared" style="width: 16px; height: 16px; cursor: pointer;">
+          <span>👥 共享给团队 <span style="color: var(--text-3); font-weight: 400; font-size: 12px;">（团队成员可查看此任务,无法编辑）</span></span>
+        </label>
       </div>
       
       <div class="field" id="history-section" style="display: none;">
@@ -1021,6 +1028,7 @@ function fixDataShape(loaded) {
         if (!t.history) t.history = [];
         if (!t.schedule) t.schedule = [];
         if (t.scheduleRaw === undefined) t.scheduleRaw = '';
+        if (typeof t.shared !== 'boolean') t.shared = false;
       });
     });
   });
@@ -1695,7 +1703,7 @@ function renderProjects() {
         <svg class="caret ${isOpen ? 'open' : ''}" viewBox="0 0 12 12"><path d="M4 2 L8 6 L4 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span style="display: inline-flex; align-items: center;">${renderIcon(game.icon, 24)}</span>
         <span class="game-name">${escapeHtml(game.name)}${game.code ? ` <span style="color: var(--text-3); font-size: 12px; font-weight: 400;">${escapeHtml(game.code)}</span>` : ''}</span>
-        ${game.shared ? '<span title="已共享给团队" style="color: var(--accent); font-size: 12px;">🔓 共享中</span>' : ''}
+        ${game.shared ? '<span title="已共享给团队" style="color: var(--accent); font-size: 12px;">👥 共享中</span>' : ''}
         ${urgentCount > 0 ? `<span class="badge danger">${urgentCount} 个今日</span>` : ''}
         <div class="game-actions" onclick="event.stopPropagation()">
           <button class="small" onclick="openModuleModal('${game.id}')">+ 模块</button>
@@ -1729,7 +1737,7 @@ function renderProjects() {
             <div class="module-header" onclick="toggleExpand('${mod.id}')">
               <svg class="caret ${modOpen ? 'open' : ''}" viewBox="0 0 12 12"><path d="M4 2 L8 6 L4 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <span class="module-name-fixed">${escapeHtml(mod.name)}</span>
-              ${mod.shared ? '<span title="已共享给团队" style="color: var(--accent); font-size: 11px;">🔓</span>' : ''}
+              ${mod.shared ? '<span title="已共享给团队" style="color: var(--accent); font-size: 11px;">👥</span>' : ''}
               ${modUrgent > 0 ? `<span class="badge danger tiny">${modUrgent}</span>` : ''}
               <span style="flex: 1;"></span>
               <div class="module-actions" onclick="event.stopPropagation()">
@@ -1813,6 +1821,7 @@ function renderTaskRow(task, game) {
           ${typeBadge}
           <span class="task-name-text">${escapeHtml(task.name)}</span>
           ${hasHistory ? '<span class="history-mark" title="追踪时间已调整">⏱</span>' : ''}
+          ${task.shared ? '<span title="已共享给团队" style="color: var(--accent); font-size: 11px;">👥</span>' : ''}
         </div>
         ${countdownLine}
         ${noteLine}
@@ -2209,8 +2218,6 @@ async function loadSharedData(forceRefresh) {
   }
   
   try {
-    // 拉所有其他用户的 user_data 行
-    // RLS 规则会过滤,只返回有权限读的(本来就是所有 authenticated 用户都能读)
     const { data: rows, error } = await supabaseClient
       .from('user_data')
       .select('user_id, display_name, data, updated_at')
@@ -2218,35 +2225,63 @@ async function loadSharedData(forceRefresh) {
     
     if (error) throw error;
     
-    // 前端过滤:只保留共享的项目/模块,组装成可渲染结构
+    // 前端过滤:三层独立勾选语义
+    // 项目勾 = 项目本身元信息(名/图标/颜色)对团队可见
+    // 模块勾 = 整个模块及其所有任务对团队可见
+    // 任务勾 = 单独任务对团队可见
+    // 上下文层级总是可见(灰色显示),但只有勾了的层级才显示备注和详细内容
     const sharedItems = [];
+    
     (rows || []).forEach(row => {
       const userData = row.data;
       if (!userData || !userData.games) return;
       
       userData.games.forEach(game => {
-        // 整个项目共享:整个项目都显示
-        if (game.shared) {
-          sharedItems.push({
-            type: 'game',
-            ownerEmail: row.display_name || '未知',
-            ownerUserId: row.user_id,
-            game: game,
-            updatedAt: row.updated_at
-          });
-        } else {
-          // 项目不共享,但某些模块共享:只显示共享的模块
-          const sharedMods = (game.modules || []).filter(m => m.shared);
-          if (sharedMods.length > 0) {
-            sharedItems.push({
-              type: 'partial',
-              ownerEmail: row.display_name || '未知',
-              ownerUserId: row.user_id,
-              game: { ...game, modules: sharedMods },
-              updatedAt: row.updated_at
+        // 收集此项目下所有共享内容
+        const sharedModules = [];
+        let hasAnySharedContent = false;
+        
+        (game.modules || []).forEach(mod => {
+          const sharedTasks = (mod.tasks || []).filter(t => t.shared);
+          const modIsShared = !!mod.shared;
+          
+          if (modIsShared || sharedTasks.length > 0) {
+            hasAnySharedContent = true;
+            // 构造模块层数据:如果模块自己勾了,带所有任务和备注;否则仅作上下文,只带共享的任务
+            sharedModules.push({
+              id: mod.id,
+              name: mod.name,
+              note: mod.note,  // 备注全部可见
+              isShared: modIsShared,  // 模块自身勾了
+              tasks: modIsShared 
+                ? (mod.tasks || [])  // 模块勾了 → 显示所有任务
+                : sharedTasks         // 模块没勾 → 只显示勾了的任务
             });
           }
-        }
+        });
+        
+        const gameIsShared = !!game.shared;
+        
+        // 项目本身没共享 + 下面也没共享内容 → 跳过
+        if (!gameIsShared && !hasAnySharedContent) return;
+        
+        sharedItems.push({
+          ownerEmail: row.display_name || '未知',
+          ownerUserId: row.user_id,
+          updatedAt: row.updated_at,
+          // 项目层:可能勾了(完整显示)或没勾(空壳上下文)
+          game: {
+            id: game.id,
+            name: game.name,
+            code: game.code,
+            icon: game.icon,
+            color: game.color,
+            note: game.note,  // 备注全部可见
+            isShared: gameIsShared,
+            customTypes: game.customTypes,  // 渲染任务类型标签需要
+            modules: sharedModules
+          }
+        });
       });
     });
     
@@ -2284,7 +2319,7 @@ function renderSharedPageForceRefresh() {
 }
 
 function renderSharedPageContent(result) {
-  if (currentPage !== 'shared') return;  // 用户切走了别再覆盖
+  if (currentPage !== 'shared') return;
   
   if (result.error) {
     document.getElementById('content').innerHTML = `
@@ -2315,7 +2350,7 @@ function renderSharedPageContent(result) {
       <div class="empty">
         <div class="empty-icon">👥</div>
         <div class="empty-title">还没有任何团队分享</div>
-        <div class="empty-text">让团队成员在自己的项目或模块设置里勾选"共享给团队",这里就会显示</div>
+        <div class="empty-text">让团队成员在自己的项目、模块或任务设置里勾选"共享给团队",这里就会显示</div>
       </div>
     `;
     return;
@@ -2341,49 +2376,81 @@ function renderSharedPageContent(result) {
     ownerItems.forEach(item => {
       const game = item.game;
       const isOpen = sharedExpanded[game.id] !== false;
+      
+      // 统计:整个项目下的总任务数
       const taskTotal = (game.modules || []).reduce((s,m) => s + (m.tasks?.length || 0), 0);
-      const partialBadge = item.type === 'partial' ? 
-        `<span class="badge" style="background: var(--surface-2); color: var(--text-2); font-size: 10px;">部分模块</span>` : '';
+      
+      // 项目层标签
+      let scopeLabel = '';
+      if (game.isShared && (game.modules || []).length === 0) {
+        // 项目本身共享但没有模块
+        scopeLabel = '<span class="badge info tiny">仅项目</span>';
+      } else if (!game.isShared) {
+        // 项目本身没勾,只是作为上下文
+        scopeLabel = '<span class="badge gray tiny" title="项目本身未共享,仅作为下方共享内容的上下文">仅作上下文</span>';
+      }
+      
+      // 空壳上下文项目用灰色淡显示
+      const gameOpacity = game.isShared ? '' : 'opacity: 0.75;';
       
       html += `
-        <div class="game-header" onclick="toggleSharedExpand('${game.id}')">
+        <div class="game-header" style="${gameOpacity}" onclick="toggleSharedExpand('${game.id}')">
           <svg class="caret ${isOpen ? 'open' : ''}" viewBox="0 0 12 12"><path d="M4 2 L8 6 L4 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span style="display: inline-flex; align-items: center;">${renderIcon(game.icon, 24)}</span>
           <span class="game-name">${escapeHtml(game.name)}${game.code ? ` <span style="color: var(--text-3); font-size: 12px; font-weight: 400;">${escapeHtml(game.code)}</span>` : ''}</span>
+          ${scopeLabel}
           <span style="font-size: 11px; color: var(--text-3);">${(game.modules || []).length} 模块 · ${taskTotal} 任务</span>
-          ${partialBadge}
         </div>
       `;
       
+      // 项目备注(总是可见)
+      if (isOpen && game.note && game.note.trim()) {
+        const fullNote = game.note.trim();
+        const truncated = fullNote.length > 80 ? fullNote.slice(0, 80) + '…' : fullNote;
+        html += `<div class="module-note-line" style="${gameOpacity}" title="${escapeHtml(fullNote)}">📌 ${escapeHtml(truncated)}</div>`;
+      }
+      
       if (isOpen) {
         if (!game.modules || game.modules.length === 0) {
-          html += `<div style="padding: 16px 36px; color: var(--text-3); font-size: 13px;">这个项目还没有模块</div>`;
+          if (game.isShared) {
+            html += `<div style="padding: 16px 36px; color: var(--text-3); font-size: 13px;">这个项目下没有共享的模块或任务</div>`;
+          }
         }
         
         (game.modules || []).forEach(mod => {
           const modOpen = sharedExpanded[mod.id] !== false;
           
-          let modNoteHtml = '';
-          if (mod.note && mod.note.trim()) {
-            const fullNote = mod.note.trim();
-            const truncated = fullNote.length > 80 ? fullNote.slice(0, 80) + '…' : fullNote;
-            modNoteHtml = `<div class="module-note-line" title="${escapeHtml(fullNote)}">📌 ${escapeHtml(truncated)}</div>`;
+          // 模块层标签
+          let modScopeLabel = '';
+          if (!mod.isShared) {
+            modScopeLabel = '<span class="badge gray tiny" title="模块本身未共享,仅作为下方共享任务的上下文">仅作上下文</span>';
           }
+          
+          const modOpacity = mod.isShared ? '' : 'opacity: 0.75;';
           
           html += `
             <div class="module">
-              <div class="module-header" onclick="toggleSharedExpand('${mod.id}')">
+              <div class="module-header" style="${modOpacity}" onclick="toggleSharedExpand('${mod.id}')">
                 <svg class="caret ${modOpen ? 'open' : ''}" viewBox="0 0 12 12"><path d="M4 2 L8 6 L4 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span class="module-name-fixed">${escapeHtml(mod.name)}</span>
+                ${modScopeLabel}
                 <span style="flex: 1;"></span>
                 <span style="font-size: 11px; color: var(--text-3);">${(mod.tasks || []).length} 任务</span>
               </div>
-              ${modNoteHtml}
           `;
+          
+          // 模块备注(总是可见)
+          if (mod.note && mod.note.trim()) {
+            const fullNote = mod.note.trim();
+            const truncated = fullNote.length > 80 ? fullNote.slice(0, 80) + '…' : fullNote;
+            html += `<div class="module-note-line" style="${modOpacity}" title="${escapeHtml(fullNote)}">📌 ${escapeHtml(truncated)}</div>`;
+          }
           
           if (modOpen) {
             if (!mod.tasks || mod.tasks.length === 0) {
-              html += `<div style="padding: 12px 60px; color: var(--text-3); font-size: 12px;">还没有任务</div>`;
+              if (mod.isShared) {
+                html += `<div style="padding: 12px 60px; color: var(--text-3); font-size: 12px;">还没有任务</div>`;
+              }
             }
             (mod.tasks || []).forEach(task => {
               html += renderSharedTaskRow(task, game);
@@ -2762,6 +2829,7 @@ function openTaskModal(taskId, gameId, moduleId) {
   originalTrackDate = defaultTrack;
   
   document.getElementById('task-note').value = task?.note || '';
+  document.getElementById('task-shared').checked = !!task?.shared;
   document.getElementById('schedule-input').value = task?.scheduleRaw || '';
   document.getElementById('track-change-reason').value = '';
   document.getElementById('track-change-reason-field').style.display = 'none';
@@ -3254,6 +3322,7 @@ function saveTask() {
   const ddl = document.getElementById('task-ddl').value;
   const newTrack = document.getElementById('task-track').value;
   const note = document.getElementById('task-note').value.trim();
+  const shared = document.getElementById('task-shared').checked;
   const scheduleRaw = document.getElementById('schedule-input').value;
   
   const game = data.games.find(g => g.id === currentTaskContext.gameId);
@@ -3288,9 +3357,10 @@ function saveTask() {
     task.ddl = ddl;
     task.nextTrack = newTrack;
     task.note = note;
+    task.shared = shared;
     task.schedule = JSON.parse(JSON.stringify(editingSchedule));
     task.scheduleRaw = scheduleRaw;
-    showToast('任务已更新');
+    showToast(shared ? '任务已更新(共享给团队)' : '任务已更新');
   } else {
     const taskNames = [];
     if (batchMode) {
@@ -3319,6 +3389,7 @@ function saveTask() {
         ddl,
         nextTrack: newTrack,
         note,
+        shared,
         schedule: JSON.parse(JSON.stringify(editingSchedule)),
         scheduleRaw,
         history: [],
@@ -3327,7 +3398,8 @@ function saveTask() {
       });
     });
     
-    showToast(taskNames.length === 1 ? '任务已创建' : `已批量创建 ${taskNames.length} 个任务`);
+    const sharedMsg = shared ? '(共享给团队)' : '';
+    showToast(taskNames.length === 1 ? '任务已创建' + sharedMsg : `已批量创建 ${taskNames.length} 个任务` + sharedMsg);
   }
   
   saveData();
