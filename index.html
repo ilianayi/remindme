@@ -1135,6 +1135,8 @@ function resetToDemo() {
 // 同步写本地(瞬时),异步推云端(失败不影响)
 function saveData() {
   saveToLocalStorage();  // 立即写本地
+  // 自己的数据变了 → 分享cache 也失效("我分享的"tab 下次打开时重新拉)
+  sharedDataCache = null;
   
   // 防抖:600ms 内多次保存合并为一次云端推送
   clearTimeout(saveDebounceTimer);
@@ -2202,10 +2204,11 @@ function calClearSelection() {
 }
 
 // ============ 团队分享页 ============
-// 缓存:其他用户的分享数据,5 分钟内不重复拉取
+// 缓存:所有用户的分享数据(含自己),5 分钟内不重复拉取
 let sharedDataCache = null;
 let sharedDataLoadedAt = 0;
 let sharedExpanded = {};  // 分享页的展开状态(独立于自己项目)
+let sharedTab = 'others';  // 'others' = 别人分享, 'mine' = 我分享的
 
 async function loadSharedData(forceRefresh) {
   if (!cloudSyncEnabled || !currentUser) {
@@ -2218,10 +2221,11 @@ async function loadSharedData(forceRefresh) {
   }
   
   try {
+    // 拉所有用户的 user_data 行(包括自己,但渲染时按 tab 过滤)
+    // RLS 规则:authenticated 用户能读所有 user_data
     const { data: rows, error } = await supabaseClient
       .from('user_data')
-      .select('user_id, display_name, data, updated_at')
-      .neq('user_id', currentUser.id);
+      .select('user_id, display_name, data, updated_at');
     
     if (error) throw error;
     
@@ -2268,6 +2272,7 @@ async function loadSharedData(forceRefresh) {
         sharedItems.push({
           ownerEmail: row.display_name || '未知',
           ownerUserId: row.user_id,
+          isMine: row.user_id === currentUser.id,
           updatedAt: row.updated_at,
           // 项目层:可能勾了(完整显示)或没勾(空壳上下文)
           game: {
@@ -2332,25 +2337,49 @@ function renderSharedPageContent(result) {
     return;
   }
   
-  const items = result.data;
+  const allItems = result.data;
   
-  // 更新侧边栏 count
+  // 拆成两组
+  const othersItems = allItems.filter(i => !i.isMine);
+  const mineItems = allItems.filter(i => i.isMine);
+  
+  // 侧边栏 count 只统计"别人分享的"(自己分享的不算"新增提醒")
   const countEl = document.getElementById('shared-count');
   if (countEl) {
-    if (items.length > 0) {
-      countEl.textContent = items.length;
+    if (othersItems.length > 0) {
+      countEl.textContent = othersItems.length;
       countEl.style.display = '';
     } else {
       countEl.style.display = 'none';
     }
   }
   
+  // 顶部 tab 切换
+  const tabsHtml = `
+    <div style="display: flex; gap: 4px; padding: 12px 20px 0; border-bottom: 0.5px solid var(--border);">
+      <div onclick="switchSharedTab('others')" 
+        style="padding: 8px 14px; cursor: pointer; font-size: 13px; border-bottom: 2px solid ${sharedTab === 'others' ? 'var(--text)' : 'transparent'}; color: ${sharedTab === 'others' ? 'var(--text)' : 'var(--text-2)'}; font-weight: ${sharedTab === 'others' ? '600' : '400'}; margin-bottom: -0.5px;">
+        别人分享 <span style="color: var(--text-3); font-weight: 400; font-size: 11px;">${othersItems.length}</span>
+      </div>
+      <div onclick="switchSharedTab('mine')"
+        style="padding: 8px 14px; cursor: pointer; font-size: 13px; border-bottom: 2px solid ${sharedTab === 'mine' ? 'var(--text)' : 'transparent'}; color: ${sharedTab === 'mine' ? 'var(--text)' : 'var(--text-2)'}; font-weight: ${sharedTab === 'mine' ? '600' : '400'}; margin-bottom: -0.5px;">
+        我分享的 <span style="color: var(--text-3); font-weight: 400; font-size: 11px;">${mineItems.length}</span>
+      </div>
+    </div>
+  `;
+  
+  // 当前 tab 要显示的数据
+  const items = sharedTab === 'mine' ? mineItems : othersItems;
+  
   if (items.length === 0) {
-    document.getElementById('content').innerHTML = `
+    const emptyMsg = sharedTab === 'mine' 
+      ? { title: '你还没有分享任何内容', text: '在自己的项目、模块或任务设置里勾选"共享给团队",对外分享的内容就会显示在这里' }
+      : { title: '还没有任何团队分享', text: '让团队成员在自己的项目、模块或任务设置里勾选"共享给团队",这里就会显示' };
+    document.getElementById('content').innerHTML = tabsHtml + `
       <div class="empty">
         <div class="empty-icon">👥</div>
-        <div class="empty-title">还没有任何团队分享</div>
-        <div class="empty-text">让团队成员在自己的项目、模块或任务设置里勾选"共享给团队",这里就会显示</div>
+        <div class="empty-title">${emptyMsg.title}</div>
+        <div class="empty-text">${emptyMsg.text}</div>
       </div>
     `;
     return;
@@ -2363,13 +2392,17 @@ function renderSharedPageContent(result) {
     byOwner[item.ownerEmail].push(item);
   });
   
-  let html = '<div class="tree">';
+  let html = tabsHtml + '<div class="tree">';
   
   Object.keys(byOwner).forEach(ownerEmail => {
     const ownerItems = byOwner[ownerEmail];
+    const isMineGroup = ownerItems[0].isMine;
+    const ownerLabel = isMineGroup 
+      ? `${escapeHtml(ownerEmail)} <span style="color: var(--accent); font-size: 11px;">(我自己)</span>`
+      : escapeHtml(ownerEmail);
     html += `
       <div style="padding: 12px 20px 8px; font-size: 12px; color: var(--text-2); border-top: 0.5px solid var(--border); margin-top: 8px;">
-        👤 ${escapeHtml(ownerEmail)} <span style="color: var(--text-3);">分享了 ${ownerItems.length} 项</span>
+        👤 ${ownerLabel} <span style="color: var(--text-3);">分享了 ${ownerItems.length} 项</span>
       </div>
     `;
     
@@ -2522,6 +2555,18 @@ function toggleSharedExpand(id) {
   // 重新渲染但不重新拉云端
   if (sharedDataCache) {
     renderSharedPageContent({ loading: false, error: null, data: sharedDataCache });
+  }
+}
+
+function switchSharedTab(tab) {
+  if (tab !== 'others' && tab !== 'mine') return;
+  if (sharedTab === tab) return;
+  sharedTab = tab;
+  // 用缓存的数据重新渲染,不重新拉云端
+  if (sharedDataCache) {
+    renderSharedPageContent({ loading: false, error: null, data: sharedDataCache });
+  } else {
+    renderSharedPage();
   }
 }
 
@@ -3681,9 +3726,11 @@ function showAuthLoading() {
     // 静默后台拉一次分享数据更新红点计数
     setTimeout(() => {
       loadSharedData(false).then(r => {
+        // 只数"别人分享的"作为红点提示,自己的不算
+        const othersCount = (r.data || []).filter(i => !i.isMine).length;
         const countEl = document.getElementById('shared-count');
-        if (countEl && r.data && r.data.length > 0) {
-          countEl.textContent = r.data.length;
+        if (countEl && othersCount > 0) {
+          countEl.textContent = othersCount;
           countEl.style.display = '';
         }
       }).catch(() => {});
@@ -3717,9 +3764,11 @@ supabaseClient.auth.onAuthStateChange(async (event, session) => {
     // 静默后台拉一次分享数据更新红点
     setTimeout(() => {
       loadSharedData(false).then(r => {
+        // 只数"别人分享的"作为红点提示,自己的不算
+        const othersCount = (r.data || []).filter(i => !i.isMine).length;
         const countEl = document.getElementById('shared-count');
-        if (countEl && r.data && r.data.length > 0) {
-          countEl.textContent = r.data.length;
+        if (countEl && othersCount > 0) {
+          countEl.textContent = othersCount;
           countEl.style.display = '';
         }
       }).catch(() => {});
